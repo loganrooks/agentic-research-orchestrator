@@ -150,6 +150,8 @@ def run_scaffold(args: object) -> int:
         (run_dir / "20_WORK").mkdir(parents=True, exist_ok=True)
         (run_dir / "30_MERGE").mkdir(parents=True, exist_ok=True)
 
+    targets_md = "\n".join([f"- {x['path']}" for x in targets]) if targets else "- (none)"
+
     brief = f"""# Research Run Brief
 
 ## Decision / Goal
@@ -168,7 +170,7 @@ def run_scaffold(args: object) -> int:
 - allowed sources:
 
 ## Targets
-{chr(10).join([f'- {x['path']}' for x in targets]) if targets else '- (none)'}
+{targets_md}
 
 ## Priors + what would change your mind
 <state priors and what evidence would force revision>
@@ -230,4 +232,3 @@ def run_scaffold(args: object) -> int:
     # Emit run dir for operators.
     sys.stdout.write(str(run_dir) + "\n")
     return 0
-
