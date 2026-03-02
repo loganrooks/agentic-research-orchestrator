@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+
+# Run bundles are stored outside the repo by default (~/.ar/runs).
+# If a user points AR_RUNS_ROOT into this repo, keep it out of git.
+.ar/
+
+# Local extraction outputs, scratch, and other generated artifacts.
+.artifacts/
