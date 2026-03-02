@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .run.import_output import run_import
 from .run.scaffold import run_scaffold
 
 
@@ -51,7 +52,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_sub.add_parser("export-prompts", help="Export runner-specific prompts")
     run_sub.add_parser("spawn-codex", help="Spawn parallel Codex workers for tasks")
-    run_sub.add_parser("import", help="Import manual runner outputs into a run bundle")
+
+    imp = run_sub.add_parser("import", help="Import manual runner outputs into a run bundle")
+    imp.add_argument("--run-dir", required=True, help="Run directory path")
+    imp.add_argument("--task", required=True, help="Task id (e.g., T-0001)")
+    imp.add_argument("--runner", required=True, help="Runner id (e.g., claude_desktop, gemini_deep_research)")
+    imp.add_argument("--producer", default="", help="Producer id (default <runner>:manual-01)")
+    imp.add_argument("--report-path", default="", help="Path to report markdown (if absent, read from stdin)")
+    imp.add_argument("--sources-path", default="", help="Path to SOURCES.json (optional)")
+    imp.add_argument("--claims-path", default="", help="Path to CLAIMS.json (optional)")
+    imp.add_argument("--residuals-path", default="", help="Path to RESIDUALS.md (optional)")
+    imp.add_argument("--model", default="", help="Model name (optional)")
+    imp.add_argument("--reasoning", default="", help="Reasoning effort (optional)")
+
     run_sub.add_parser("merge", help="Merge producer outputs into canonical synthesis artifacts")
     run_sub.add_parser("validate", help="Validate run bundle structure and non-destructive synthesis")
     run_sub.add_parser("status", help="Show run bundle status")
@@ -75,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "run" and args.run_cmd == "scaffold":
         return run_scaffold(args)
+    if args.cmd == "run" and args.run_cmd == "import":
+        return run_import(args)
 
     sys.stderr.write("Not implemented yet. See docs/CLI_SPEC.md for v1 contract.\n")
     return 2
