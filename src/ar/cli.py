@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from .run.import_output import run_import
+from .run.merge import run_merge
 from .run.scaffold import run_scaffold
 from .run.status import run_status
 from .run.validate import run_validate
@@ -67,7 +68,13 @@ def _build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--model", default="", help="Model name (optional)")
     imp.add_argument("--reasoning", default="", help="Reasoning effort (optional)")
 
-    run_sub.add_parser("merge", help="Merge producer outputs into canonical synthesis artifacts")
+    merge = run_sub.add_parser("merge", help="Merge producer outputs into canonical synthesis artifacts")
+    merge.add_argument("--run-dir", required=True, help="Run directory path")
+    merge.add_argument(
+        "--allow-missing-registers",
+        action="store_true",
+        help="Allow missing CLAIMS.json/SOURCES.json in producer dirs (not recommended)",
+    )
 
     val = run_sub.add_parser("validate", help="Validate run bundle structure and non-destructive synthesis")
     val.add_argument("--run-dir", required=True, help="Run directory path")
@@ -100,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_validate(args)
     if args.cmd == "run" and args.run_cmd == "status":
         return run_status(args)
+    if args.cmd == "run" and args.run_cmd == "merge":
+        return run_merge(args)
 
     sys.stderr.write("Not implemented yet. See docs/CLI_SPEC.md for v1 contract.\n")
     return 2
