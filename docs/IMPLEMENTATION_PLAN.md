@@ -46,6 +46,10 @@ These requirements are included explicitly because they are easy to “almost im
    - Why: without monitoring, parallelism becomes “many failures faster.”
 9. **Initial settings should be set intentionally** (model/reasoning/timeouts), and the first interaction should ask clarifying questions without being reductive.
    - Why: defaults can accidentally become extremely expensive (e.g., global `xhigh`) or too weak; we need intentional configuration.
+10. **Other providers are optional depth/breadth**; we must degrade gracefully if we never get their outputs.
+   - Why: access, UI limitations, and timeouts mean optional providers cannot be a hard dependency.
+11. **When optional providers are available, compare them** (and compare reasoning levels) rather than treating them as interchangeable.
+   - Why: comparison is how we update priors (“what works”) and tune cost/performance over time.
 
 ---
 
@@ -186,7 +190,9 @@ Required keys (v1):
 - `created_at` (ISO8601)
 - `created_by` (string; may be empty)
 - `targets` (list of `{path,label}`)
-- `runner_plan` (list of runner ids)
+- `runner_plan` (object with required vs optional runners):
+  - `required` (list)
+  - `optional` (list)
 - `codex`:
   - `model_default` (default `gpt-5.2`)
   - `reasoning_default` (default `high`)
@@ -200,6 +206,8 @@ Required keys (v1):
   - `citation_preference` (`links_ok|no_links|mixed`)
 
 **Why:** This file makes the run reproducible and lets automated tooling (merge/validate) make decisions without guessing.
+
+**Important nuance:** other providers are optional depth/breadth. The run must remain usable if they never return outputs.
 
 ### 5.3 `STATE.json` (single-writer; supervisor only)
 Required keys:

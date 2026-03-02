@@ -64,11 +64,29 @@ Purpose: machine-readable configuration for reproducibility.
 
 Must include:
 - schema version
-- runner plan
+- runner plan (required vs optional)
 - codex defaults (model, reasoning, sandbox, timeout, worker count)
 - quality policy flags
 
 **Why:** Automation and validation need to run without guessing from prose.
+
+#### Runner plan: required vs optional
+`runner_plan` must be an object:
+```json
+{
+  "required": ["codex"],
+  "optional": ["claude_desktop", "cowork", "gemini_deep_research", "gemini_cli"]
+}
+```
+
+Rules:
+1. Optional runners are treated as “depth/breadth bonuses”.
+2. The system must remain usable and valid even if **no optional runner outputs arrive**.
+3. A run is allowed to set `required=[]` (e.g., scaffold-only runs), but merge/validate should then report the run as incomplete until at least one producer output exists.
+
+Why:
+- In practice, you may not get outputs from other providers (timeouts, access, UI limitations). They must not be a single point of failure.
+- Optional runners are most valuable for *comparison* and *conflict detection*, not as required dependencies.
 
 ### STATE.json
 Purpose: resumability and concurrency control.
@@ -148,6 +166,72 @@ Required:
 
 **Why:** We want a synthesis that is actionable and explicit about uncertainty, not a “summary blob.”
 
+### Optional comparison artifacts (recommended)
+If there are multiple producers for the same task (e.g., Codex + Gemini, or Codex at two reasoning levels), the merger should also emit:
+- `30_MERGE/COMPARISON.md`
+- `30_MERGE/COMPARISON.json`
+
+`COMPARISON.md` should include, per task and producer:
+- provenance summary (runner, model, reasoning)
+- token usage (if known)
+- elapsed time (if known)
+- counts: sources, claims
+- a short “divergence” section:
+  - where conclusions conflict
+  - where one producer found counterexamples the other missed
+
+Why:
+- When other providers are available, the ability to compare model outputs is one of the main reasons to run them.
+- Comparison is optional: the system must still work when only one producer exists.
+
+#### `COMPARISON.json` schema (v1)
+This file exists so we can later compute trends (e.g., “does gpt-5.2 medium usually fail to catch contradictions?”) without scraping markdown.
+
+```json
+{
+  "schema_version": 1,
+  "generated_at": "ISO8601",
+  "tasks": [
+    {
+      "task_id": "T-0001",
+      "producers": [
+        {
+          "producer_id": "codex:worker-01",
+          "runner": "codex",
+          "model": "gpt-5.2",
+          "reasoning_effort": "high",
+          "status": "ok",
+          "elapsed_seconds": 123.4,
+          "token_usage": {
+            "input": 1000,
+            "cached_input": 0,
+            "output": 500,
+            "reasoning": 200,
+            "total": 1700
+          },
+          "counts": {
+            "sources": 12,
+            "claims": 22
+          },
+          "notes": ""
+        }
+      ],
+      "divergences": [
+        {
+          "type": "conflict|coverage_gap|counterexample_missed|other",
+          "summary": "Short description of what differed.",
+          "affected_claim_ids": ["C-0012"],
+          "notes": ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+Why:
+- Markdown comparison is for humans; JSON comparison is for automation, dashboards, and longitudinal analysis.
+
 ---
 
 ## Idempotency Rules
@@ -161,6 +245,30 @@ Required:
 
 ---
 
+## Validation Semantics (what counts as “valid”)
+
+Validation is not a single concept. We distinguish:
+
+1. **Structurally valid**
+   - the run bundle layout is correct
+   - required files exist
+   - provenance exists for any producer output that exists
+
+2. **Operationally complete**
+   - at least one task has at least one producer output
+   - merge artifacts exist and are internally consistent
+
+Rules:
+1. Missing **optional** runner outputs must never cause a run to be “invalid”.
+2. If `runner_plan.required` is non-empty, and the run has producer outputs, but none are from required runners, validation should flag this clearly.
+3. If there are **zero producer outputs** in `20_WORK/`, validation should report “incomplete” rather than “corrupt”.
+
+Why:
+- Optional providers are not guaranteed. We need graceful degradation.
+- Incomplete runs happen naturally when you scaffold before running workers.
+
+---
+
 ## Concurrency Rules
 
 1. Supervisor owns `STATE.json`.
@@ -168,4 +276,3 @@ Required:
 3. No producer writes to `30_MERGE/`.
 
 **Why:** Prevents race conditions and ensures traceability.
-

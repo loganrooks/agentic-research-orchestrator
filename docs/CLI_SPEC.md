@@ -33,7 +33,9 @@ Required inputs:
 Optional inputs:
 - `--runs-root <path>` (default `AR_RUNS_ROOT` or `~/.ar/runs`)
 - `--targets <path>` (repeatable)
-- `--runner <runner>` (repeatable; default includes `codex` + manual runners)
+- Runner plan:
+  - `--required-runner <runner>` (repeatable; default: `codex`)
+  - `--optional-runner <runner>` (repeatable; default: `claude_desktop`, `cowork`, `gemini_deep_research`, `gemini_cli`)
 - Codex defaults overrides:
   - `--codex-model <model>` (default `gpt-5.2`)
   - `--codex-reasoning <low|medium|high|xhigh>` (default `high`)
@@ -46,6 +48,9 @@ Optional inputs:
 Outputs:
 - Run directory with required structure:
   - `00_BRIEF.md`, `01_CONFIG.json`, `STATE.json`, `LOG.jsonl`, `10_TASKS/`, `20_WORK/`, `30_MERGE/`
+
+Notes:
+- Optional runners are treated as “depth/breadth bonuses”. The system must remain usable if they never produce outputs.
 
 Exit codes:
 - `0` success
@@ -184,4 +189,3 @@ Outputs:
 - tasks and statuses
 - producers per task
 - last log events (tail)
-
