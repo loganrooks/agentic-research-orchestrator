@@ -5,6 +5,7 @@ import sys
 
 from .run.import_output import run_import
 from .run.scaffold import run_scaffold
+from .run.status import run_status
 from .run.validate import run_validate
 
 
@@ -71,7 +72,8 @@ def _build_parser() -> argparse.ArgumentParser:
     val = run_sub.add_parser("validate", help="Validate run bundle structure and non-destructive synthesis")
     val.add_argument("--run-dir", required=True, help="Run directory path")
 
-    run_sub.add_parser("status", help="Show run bundle status")
+    status = run_sub.add_parser("status", help="Show run bundle status")
+    status.add_argument("--run-dir", required=True, help="Run directory path")
 
     return p
 
@@ -96,6 +98,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_import(args)
     if args.cmd == "run" and args.run_cmd == "validate":
         return run_validate(args)
+    if args.cmd == "run" and args.run_cmd == "status":
+        return run_status(args)
 
     sys.stderr.write("Not implemented yet. See docs/CLI_SPEC.md for v1 contract.\n")
     return 2
