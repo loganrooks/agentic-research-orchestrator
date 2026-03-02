@@ -10,6 +10,7 @@ Every major instruction includes a **Why** section to reduce misinterpretation.
 2. `docs/RUN_BUNDLE_SPEC.md`: canonical on-disk contract (source of truth for structure).
 3. `docs/TASK_WRITING_GUIDE.md`: how to write tasks without over-determinism.
 4. `docs/RUNNER_GUIDES/*`: runner-specific constraints and expectations.
+5. `docs/CLI_SPEC.md`: exact CLI surface to implement (prevents drift).
 
 ---
 
