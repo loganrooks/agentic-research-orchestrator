@@ -5,6 +5,7 @@ import sys
 
 from .run.import_output import run_import
 from .run.scaffold import run_scaffold
+from .run.validate import run_validate
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -66,7 +67,10 @@ def _build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--reasoning", default="", help="Reasoning effort (optional)")
 
     run_sub.add_parser("merge", help="Merge producer outputs into canonical synthesis artifacts")
-    run_sub.add_parser("validate", help="Validate run bundle structure and non-destructive synthesis")
+
+    val = run_sub.add_parser("validate", help="Validate run bundle structure and non-destructive synthesis")
+    val.add_argument("--run-dir", required=True, help="Run directory path")
+
     run_sub.add_parser("status", help="Show run bundle status")
 
     return p
@@ -90,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_scaffold(args)
     if args.cmd == "run" and args.run_cmd == "import":
         return run_import(args)
+    if args.cmd == "run" and args.run_cmd == "validate":
+        return run_validate(args)
 
     sys.stderr.write("Not implemented yet. See docs/CLI_SPEC.md for v1 contract.\n")
     return 2
