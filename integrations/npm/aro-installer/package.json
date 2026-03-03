@@ -1,13 +1,27 @@
 {
   "name": "aro-installer",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.1",
   "description": "Installer + config generator for agentic-research-orchestrator (MCP + Codex skill).",
   "bin": {
-    "aro": "bin/aro.js"
+    "aro": "bin/aro.js",
+    "aro-installer": "bin/aro.js"
   },
+  "files": [
+    "README.md",
+    "bin/",
+    "skills/"
+  ],
+  "keywords": [
+    "agentic",
+    "research",
+    "orchestrator",
+    "mcp",
+    "codex",
+    "claude",
+    "gemini",
+    "installer"
+  ],
   "engines": {
     "node": ">=18"
   }
 }
-

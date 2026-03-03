@@ -6,6 +6,13 @@ Minimal installer/config generator for:
 
 ## Usage
 
+From npm (once published):
+
+```bash
+npx --yes aro-installer --help
+npx --yes aro-installer setup
+```
+
 From this repo (recommended via `npx` from the repo root):
 
 ```bash

@@ -15,6 +15,12 @@ From the repo root (TTY required):
 npx --yes ./integrations/npm/aro-installer setup
 ```
 
+Once `aro-installer` is published to npm, you can also run:
+
+```bash
+npx --yes aro-installer setup
+```
+
 This can install the Codex skill and write MCP config for Claude Code and/or Gemini CLI.
 
 ---
