@@ -4,10 +4,9 @@ on:
   push:
     tags:
       - "aro-installer-v*"
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 concurrency:
@@ -52,6 +51,15 @@ jobs:
             exit 1
           fi
 
+      - name: Check npm credentials
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
+            echo "Missing required secret: NPM_TOKEN"
+            exit 1
+          fi
+
       - name: Publish
         working-directory: integrations/npm/aro-installer
         env:
@@ -59,3 +67,16 @@ jobs:
         run: |
           npm publish --access public --provenance
 
+      - name: Pack release artifact
+        working-directory: integrations/npm/aro-installer
+        run: |
+          npm pack
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            integrations/npm/aro-installer/aro-installer-*.tgz

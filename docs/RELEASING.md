@@ -30,4 +30,4 @@ GitHub Actions will:
 - run tests
 - verify the tag version matches `package.json`
 - publish to npm
-
+- create a GitHub Release (with auto-generated notes) and attach the `npm pack` tarball
