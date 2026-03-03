@@ -12,13 +12,47 @@ CLI name: `ar`
    - Every command that operates on an existing run requires `--run-dir`.
    - Why: guessing the “latest run” is convenient but dangerous and causes accidental corruption.
 
-2. **Logs are always written**
-   - All commands append to `LOG.jsonl` (if `--run-dir` is provided).
+2. **Logs are written for real runs**
+   - All non-`--dry-run` commands append to `LOG.jsonl` (if `--run-dir` is provided).
    - Why: debugging requires traces; silent runs create mystery failures.
 
 3. **Dry-run where it matters**
    - Use `--dry-run` for commands that would create/overwrite artifacts.
    - Why: lets you inspect intent before mutation.
+
+---
+
+## `ar mcp serve`
+
+Purpose:
+- Serve a minimal MCP (Model Context Protocol) tool surface over stdio so an external orchestrator (e.g., Claude Code) can operate run bundles without copy/paste.
+
+Inputs:
+- `--write-enabled` (optional; default false)
+- `--allow-run-dir-prefix <path>` (repeatable; optional but recommended)
+- `--max-calls-per-minute <int>` (optional; default 60)
+
+Behavior:
+- Stdio JSON-RPC server with support for:
+  - `initialize`
+  - `tools/list`
+  - `tools/call`
+  - `prompts/list`
+  - `prompts/get`
+- Every tool call requires an explicit `run_dir` argument.
+- Write-capable tools are rejected unless `--write-enabled` is set.
+- Tool calls are appended to `12_SUPERVISOR/MCP_LOG.jsonl` for auditability.
+- Write tools enforce basic symlink/escape checks on key run bundle paths.
+
+Prompts:
+- The server exposes an `orchestrator_prompt` MCP prompt that returns a runner-specific copy/paste prompt for producing an `OrchestratorPlan` JSON.
+- Prompt args:
+  - `run_dir` (required)
+  - `runner` (optional; default `claude_code`)
+  - `profile` (optional; default `guided`)
+
+Exit codes:
+- `0` clean shutdown / EOF
 
 ---
 
@@ -76,6 +110,112 @@ Behavior:
 
 Why:
 - Different runners have different output affordances. Exported prompts reduce “format mismatch” errors.
+
+---
+
+## `ar run export-orchestrator-prompt`
+
+Purpose:
+- Produce a runner-specific copy/paste prompt for an *orchestrator brain* (Codex/Claude/Gemini/etc) to emit an `OrchestratorPlan` JSON.
+
+Inputs:
+- `--run-dir <path>` (required)
+- `--runner <runner>` (required)
+- `--profile <normal|guided>` (optional; default `normal`)
+- `--out-path <path>` (optional; default: `<run>/12_SUPERVISOR/PROMPTS/ORCHESTRATOR_PROMPT_<ts>__<runner>.md`)
+
+Outputs:
+- Writes a single prompt markdown file (for copy/paste) under `12_SUPERVISOR/PROMPTS/` by default.
+
+Notes:
+- Orchestrator prompts must request **JSON-only** output (no markdown fences), so the plan can be applied deterministically.
+
+---
+
+## `ar run apply-plan`
+
+Purpose:
+- Apply an `OrchestratorPlan` (JSON) to create canonical task files under `10_TASKS/` and register them in `STATE.json`.
+
+Inputs:
+- `--run-dir <path>` (required)
+- `--plan-path <path|->` (required; `-` reads JSON from stdin)
+- `--dry-run` (optional; validate/preview without writing)
+
+Outputs:
+- Writes a plan snapshot under `12_SUPERVISOR/PLANS/`
+- Creates new `10_TASKS/T-XXXX__<slug>.md` files (create-only; no updates in v1)
+- Appends a `task_generation` event to `LOG.jsonl`
+- Updates `STATE.json.tasks` with new tasks as `pending`
+
+Exit codes:
+- `0` success (including idempotent re-apply)
+- `2` invalid args / invalid plan / unsafe operation
+
+---
+
+## `ar run generate-tasks`
+
+Purpose:
+- Run a single Codex “supervisor” to emit an `OrchestratorPlan` JSON and apply it to create tasks.
+
+Inputs:
+- `--run-dir <path>` (required)
+- `--model <model>` (optional; default from config)
+- `--reasoning <effort>` (optional; default from config)
+- `--profile <normal|guided>` (optional; default `normal`)
+- `--sandbox <mode>` (optional; default from config)
+- `--timeout-seconds <int>` (optional; default from config)
+- `--dry-run` (optional; runs supervisor + validates plan, but does not create tasks or mutate `STATE.json`/`LOG.jsonl`)
+
+Behavior:
+- Exports a Codex orchestrator prompt into a supervisor session directory.
+- Runs `codex exec --json` with explicit model + reasoning overrides.
+- Captures supervisor artifacts (events, last message, stderr, provenance).
+- Extracts the plan JSON and applies it via `ar run apply-plan`.
+
+Outputs:
+- Supervisor session artifacts under `12_SUPERVISOR/SESSIONS/...`
+- Task files under `10_TASKS/` (unless `--dry-run`)
+- Plan snapshot under `12_SUPERVISOR/PLANS/` (unless `--dry-run`)
+- `LOG.jsonl` events:
+  - `generate_tasks_started` / `generate_tasks_finished` (unless `--dry-run`)
+  - `task_generation` (unless `--dry-run`)
+
+Exit codes:
+- `0` success
+- `20` fatal (Codex missing/timeout, invalid plan output, apply failed)
+
+---
+
+## `ar run propose-followups`
+
+Purpose:
+- Propose *follow-up* tasks via a Codex supervisor, using existing merge artifacts as context.
+
+Precondition:
+- `ar run merge` has been run (requires `30_MERGE/REPORT.md` to exist).
+
+Inputs:
+- `--run-dir <path>` (required)
+- `--model <model>` (optional; default from config)
+- `--reasoning <effort>` (optional; default from config)
+- `--profile <normal|guided>` (optional; default `guided`)
+- `--sandbox <mode>` (optional; default from config)
+- `--timeout-seconds <int>` (optional; default from config)
+- `--dry-run` (optional; runs supervisor + validates plan, but does not create tasks or mutate `STATE.json`/`LOG.jsonl`)
+
+Outputs:
+- Supervisor session artifacts under `12_SUPERVISOR/SESSIONS/FOLLOWUPS_<ts>__codex/`
+- Task files under `10_TASKS/` (unless `--dry-run`)
+- Plan snapshot under `12_SUPERVISOR/PLANS/` (unless `--dry-run`)
+- `LOG.jsonl` events:
+  - `propose_followups_started` / `propose_followups_finished` (unless `--dry-run`)
+  - `task_generation` with `source=propose-followups` (unless `--dry-run`)
+
+Exit codes:
+- `0` success
+- `20` fatal (missing merge artifacts, Codex missing/timeout, invalid plan output, apply failed)
 
 ---
 

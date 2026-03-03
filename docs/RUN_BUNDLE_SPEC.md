@@ -239,7 +239,7 @@ Why:
 1. `scaffold` must not overwrite existing files unless `--rebuild` is set.
 2. `import` must create a new producer folder if the target exists (suffix with `-02`, `-03`, etc.).
 3. `merge` must be deterministic given the same inputs.
-4. `validate` must be read-only (no mutations).
+4. `validate` must be read-only with respect to research artifacts (`20_WORK/`, `30_MERGE/`), but may update supervisor metadata (`LOG.jsonl`, `STATE.json`).
 
 **Why:** Re-runs are normal. Idempotency prevents “mysterious corruption.”
 
