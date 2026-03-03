@@ -2,6 +2,7 @@
   "name": "aro-installer",
   "version": "0.1.1",
   "description": "Installer + config generator for agentic-research-orchestrator (MCP + Codex skill).",
+  "license": "MIT",
   "bin": {
     "aro": "bin/aro.js",
     "aro-installer": "bin/aro.js"
