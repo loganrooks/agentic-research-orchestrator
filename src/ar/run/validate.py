@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,59 @@ class ValidationFinding:
 
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _now_local() -> datetime:
+    fixed = os.environ.get("AR_FIXED_NOW", "").strip()
+    if fixed:
+        dt = datetime.fromisoformat(fixed)
+        if dt.tzinfo is None:
+            return dt
+        return dt.astimezone()
+    return datetime.now().astimezone()
+
+
+def _append_log(run_dir: Path, event: dict[str, Any]) -> None:
+    log_path = run_dir / "LOG.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(event, ensure_ascii=True) + "\n")
+
+
+def _atomic_write_json(path: Path, obj: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def _try_update_state(
+    run_dir: Path,
+    *,
+    status: str | None = None,
+    current_step: str | None = None,
+    preserve_statuses: set[str] | None = None,
+) -> None:
+    state_path = run_dir / "STATE.json"
+    if not state_path.exists():
+        return
+    try:
+        state = _load_json(state_path)
+    except Exception:
+        return
+    if not isinstance(state, dict):
+        return
+    if status is not None:
+        if preserve_statuses and state.get("status") in preserve_statuses:
+            pass
+        else:
+            state["status"] = status
+    if current_step is not None:
+        state["current_step"] = current_step
+    try:
+        _atomic_write_json(state_path, state)
+    except Exception:
+        return
 
 
 def _iter_producer_dirs(run_dir: Path) -> list[Path]:
@@ -110,6 +165,113 @@ def _validate_required_runner_presence(run_dir: Path) -> list[ValidationFinding]
     return []
 
 
+def _safe_load_json_array(path: Path) -> list[Any]:
+    obj = _load_json(path)
+    if isinstance(obj, list):
+        return obj
+    raise ValueError(f"Expected JSON array: {path}")
+
+
+def _validate_merge_outputs(run_dir: Path, producers: list[Path]) -> list[ValidationFinding]:
+    """
+    Validate merge artifacts if a merge appears to have been executed.
+
+    We treat the presence of 30_MERGE/COMPARISON.json as "merge ran".
+    """
+    merge_root = run_dir / "30_MERGE"
+    comp_path = merge_root / "COMPARISON.json"
+    if not comp_path.exists():
+        if producers:
+            return [
+                ValidationFinding(
+                    "warn",
+                    "producer outputs exist but merge artifacts are missing (run `ar run merge`)",
+                    str(comp_path),
+                )
+            ]
+        return []
+
+    findings: list[ValidationFinding] = []
+    required = [
+        "REPORT.md",
+        "SOURCES.json",
+        "CLAIMS.json",
+        "CONFLICTS.md",
+        "ASSUMPTIONS_AND_PROBES.md",
+        "RESIDUALS.md",
+        "RECOMMENDATIONS.md",
+        "COMPARISON.md",
+        "COMPARISON.json",
+    ]
+    for rel in required:
+        p = merge_root / rel
+        if not p.exists():
+            findings.append(ValidationFinding("error", "missing required merge artifact", str(p)))
+
+    # Non-destructive: merged claims count must be >= total producer claims.
+    merged_claims_path = merge_root / "CLAIMS.json"
+    if merged_claims_path.exists():
+        try:
+            merged_claims = _safe_load_json_array(merged_claims_path)
+            merged_count = len(merged_claims)
+        except Exception:
+            merged_count = -1
+        total_producer_claims = 0
+        for pdir in producers:
+            cp = pdir / "CLAIMS.json"
+            if not cp.exists():
+                continue
+            try:
+                total_producer_claims += len(_safe_load_json_array(cp))
+            except Exception:
+                continue
+        if merged_count >= 0 and merged_count < total_producer_claims:
+            findings.append(
+                ValidationFinding(
+                    "error",
+                    "merge appears destructive (merged claims fewer than producer claims)",
+                    str(merged_claims_path),
+                )
+            )
+
+    # If conflicts were detected, CONFLICTS.md must not be an empty/none placeholder.
+    conflicts_expected = False
+    try:
+        comp = _load_json(comp_path)
+        tasks = comp.get("tasks")
+        if isinstance(tasks, list):
+            for t in tasks:
+                if not isinstance(t, dict):
+                    continue
+                divs = t.get("divergences")
+                if not isinstance(divs, list):
+                    continue
+                for d in divs:
+                    if isinstance(d, dict) and d.get("type") == "conflict":
+                        conflicts_expected = True
+                        break
+                if conflicts_expected:
+                    break
+    except Exception:
+        conflicts_expected = False
+
+    conflicts_path = merge_root / "CONFLICTS.md"
+    if conflicts_expected and conflicts_path.exists():
+        try:
+            txt = conflicts_path.read_text(encoding="utf-8").strip().lower()
+        except Exception:
+            txt = ""
+        if not txt or "(none detected)" in txt:
+            findings.append(
+                ValidationFinding(
+                    "error",
+                    "conflicts detected but CONFLICTS.md appears empty",
+                    str(conflicts_path),
+                )
+            )
+
+    return findings
+
 def run_validate(args: object) -> int:
     run_dir = Path(str(getattr(args, "run_dir", ""))).expanduser().resolve()
     if not run_dir.exists():
@@ -119,11 +281,24 @@ def run_validate(args: object) -> int:
     findings: list[ValidationFinding] = []
     findings.extend(_validate_run_structure(run_dir))
 
+    _try_update_state(run_dir, current_step="validate")
+
+    _append_log(
+        run_dir,
+        {
+            "ts": _now_local().isoformat(timespec="seconds"),
+            "level": "info",
+            "event": "validate_started",
+            "data": {},
+        },
+    )
+
     producers = _iter_producer_dirs(run_dir)
     for pdir in producers:
         findings.extend(_validate_producer_dir(pdir))
 
     findings.extend(_validate_required_runner_presence(run_dir))
+    findings.extend(_validate_merge_outputs(run_dir, producers))
 
     errors = [f for f in findings if f.severity == "error"]
     warns = [f for f in findings if f.severity == "warn"]
@@ -136,6 +311,16 @@ def run_validate(args: object) -> int:
     if errors:
         for e in errors:
             sys.stderr.write(f"[ERROR] {e.message}: {e.path}\n")
+        _append_log(
+            run_dir,
+            {
+                "ts": _now_local().isoformat(timespec="seconds"),
+                "level": "error",
+                "event": "validate_finished",
+                "data": {"errors": len(errors), "warns": len(warns)},
+            },
+        )
+        _try_update_state(run_dir, status="failed")
         return 30
 
     # If there are no producer outputs, the run is structurally valid but incomplete.
@@ -143,5 +328,14 @@ def run_validate(args: object) -> int:
         sys.stdout.write("[INFO] structurally valid run bundle; no producer outputs yet (incomplete)\n")
     else:
         sys.stdout.write("[OK] structurally valid run bundle\n")
+    _append_log(
+        run_dir,
+        {
+            "ts": _now_local().isoformat(timespec="seconds"),
+            "level": "info",
+            "event": "validate_finished",
+            "data": {"errors": 0, "warns": len(warns)},
+        },
+    )
+    _try_update_state(run_dir, status="validated", preserve_statuses={"partial"})
     return 0
-

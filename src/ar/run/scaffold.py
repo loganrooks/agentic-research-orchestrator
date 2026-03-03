@@ -101,6 +101,10 @@ def run_scaffold(args: object) -> int:
     dry_run = bool(getattr(args, "dry_run", False))
     rebuild = bool(getattr(args, "rebuild", False))
 
+    if not slug and not goal:
+        sys.stderr.write("[ERROR] scaffold requires --slug or --goal\n")
+        return 2
+
     if not slug:
         slug = _derive_slug_from_goal(goal)
     slug = _slugify(slug)
