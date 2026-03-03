@@ -26,7 +26,9 @@ def _now_local() -> datetime:
         dt = datetime.fromisoformat(fixed)
         if dt.tzinfo is None:
             return dt
-        return dt.astimezone()
+        # Keep the provided offset instead of converting to the host locale.
+        # This makes run-dir naming deterministic across environments (e.g. CI).
+        return dt
     return datetime.now().astimezone()
 
 
