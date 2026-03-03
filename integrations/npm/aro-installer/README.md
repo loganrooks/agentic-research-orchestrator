@@ -6,31 +6,36 @@ Minimal installer/config generator for:
 
 ## Usage
 
-From this repo:
+From this repo (recommended via `npx` from the repo root):
 
 ```bash
-cd integrations/npm/aro-installer
-node bin/aro.js --help
+cd /path/to/agentic-research-orchestrator
+npx --yes ./integrations/npm/aro-installer --help
 ```
 
-Install the Codex skill:
+Interactive setup (TTY required):
 
 ```bash
-node bin/aro.js install codex-skill
+npx --yes ./integrations/npm/aro-installer setup
 ```
 
-Initialize Claude Code MCP config (project scope, in the current directory):
+Non-interactive: install the Codex skill:
 
 ```bash
-node bin/aro.js init claude-code --scope project --runs-root ~/.ar/runs --mode both
+npx --yes ./integrations/npm/aro-installer install codex-skill
 ```
 
-Initialize Gemini CLI MCP config (user scope):
+Non-interactive: initialize Claude Code MCP config (project scope):
 
 ```bash
-node bin/aro.js init gemini-cli --scope user --runs-root ~/.ar/runs --mode ro
+npx --yes ./integrations/npm/aro-installer init claude-code --scope project --runs-root ~/.ar/runs --mode both
+```
+
+Non-interactive: initialize Gemini CLI MCP config (user scope):
+
+```bash
+npx --yes ./integrations/npm/aro-installer init gemini-cli --scope user --runs-root ~/.ar/runs --mode ro
 ```
 
 Notes:
 - This tool writes config files but does **not** install the Python package. Ensure the configured `command` resolves to a Python environment where `agentic-research-orchestrator` is installed.
-

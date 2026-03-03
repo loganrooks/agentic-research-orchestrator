@@ -7,6 +7,18 @@ This repo supports two integration modes:
 
 ---
 
+## Quick start (interactive)
+
+From the repo root (TTY required):
+
+```bash
+npx --yes ./integrations/npm/aro-installer setup
+```
+
+This can install the Codex skill and write MCP config for Claude Code and/or Gemini CLI.
+
+---
+
 ## Codex skill
 
 Skill source (in this repo):
