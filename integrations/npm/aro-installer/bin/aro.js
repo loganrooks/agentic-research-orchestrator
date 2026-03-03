@@ -54,8 +54,8 @@ Usage:
 
   aro install codex-skill [--name <skill>] [--dest <skills-root>] [--force]
 
-  aro init claude-code --scope <project|user> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
-  aro init gemini-cli --scope <project|user> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
+  aro init claude-code --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
+  aro init gemini-cli --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
 
 Notes:
   - Default --runs-root is ~/.ar/runs
@@ -149,7 +149,7 @@ function cmdInit(argv) {
   if (!client) die("Missing client. Expected: claude-code | gemini-cli");
 
   const scope = String(flags.scope || "").trim() || "project";
-  if (!["project", "user"].includes(scope)) die("Invalid --scope. Expected: project | user");
+  if (!["project", "user", "both"].includes(scope)) die("Invalid --scope. Expected: project | user | both");
 
   const projectRoot = path.resolve(expandHome(flags["project-root"] || "") || process.cwd());
   const runsRootAbs = path.resolve(expandHome(flags["runs-root"] || "") || path.join(os.homedir(), ".ar", "runs"));
@@ -159,25 +159,31 @@ function cmdInit(argv) {
 
   if (!["ro", "rw", "both"].includes(mode)) die("Invalid --mode. Expected: ro | rw | both");
 
-  let configPath;
-  if (client === "claude-code") {
-    configPath = scope === "project" ? path.join(projectRoot, ".mcp.json") : path.join(os.homedir(), ".claude.json");
-  } else if (client === "gemini-cli") {
-    configPath =
-      scope === "project"
-        ? path.join(projectRoot, ".gemini", "settings.json")
-        : path.join(os.homedir(), ".gemini", "settings.json");
-  } else {
+  const scopes = scope === "both" ? ["user", "project"] : [scope];
+  const configPaths = [];
+  for (const sc of scopes) {
+    if (client === "claude-code") {
+      configPaths.push(sc === "project" ? path.join(projectRoot, ".mcp.json") : path.join(os.homedir(), ".claude.json"));
+      continue;
+    }
+    if (client === "gemini-cli") {
+      configPaths.push(
+        sc === "project" ? path.join(projectRoot, ".gemini", "settings.json") : path.join(os.homedir(), ".gemini", "settings.json"),
+      );
+      continue;
+    }
     die(`Unknown client: ${client}`);
   }
 
-  const config = readJsonIfExists(configPath);
-  if (config.mcpServers !== undefined) {
-    ensureObjectField(config, "mcpServers", configPath);
+  for (const configPath of configPaths) {
+    const config = readJsonIfExists(configPath);
+    if (config.mcpServers !== undefined) {
+      ensureObjectField(config, "mcpServers", configPath);
+    }
+    addServersToConfig({ config, baseName, pythonCmd, runsRootAbs, mode });
+    writeJson(configPath, config);
+    process.stdout.write(`Updated ${client} MCP config: ${configPath}\n`);
   }
-  addServersToConfig({ config, baseName, pythonCmd, runsRootAbs, mode });
-  writeJson(configPath, config);
-  process.stdout.write(`Updated ${client} MCP config: ${configPath}\n`);
   process.stdout.write(`Runs confinement: ${runsRootAbs}\n`);
 }
 
@@ -197,4 +203,3 @@ function main() {
 }
 
 main();
-

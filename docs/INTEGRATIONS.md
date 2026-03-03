@@ -16,7 +16,7 @@ Install into Codex (writes to `~/.codex/skills` by default):
 
 ```bash
 cd /path/to/agentic-research-orchestrator
-node integrations/npm/aro-installer/bin/aro.js install codex-skill
+npx --yes ./integrations/npm/aro-installer install codex-skill
 ```
 
 Restart Codex after installing.
@@ -34,11 +34,12 @@ python3 -m ar mcp serve --allow-run-dir-prefix ~/.ar/runs
 Or generate/update config via the installer:
 
 ```bash
-node integrations/npm/aro-installer/bin/aro.js init claude-code --scope project --runs-root ~/.ar/runs --mode both
+npx --yes ./integrations/npm/aro-installer init claude-code --scope project --runs-root ~/.ar/runs --mode both
 ```
 
 Notes:
 - `--mode both` installs two servers: `<base>_ro` and `<base>_rw` (write-enabled).
+- `--scope both` writes both user + project config in one go.
 - The server also exposes an MCP prompt named `orchestrator_prompt` (see `integrations/codex/skills/agentic-research-orchestrator/references/claude-code.md`).
 
 ---
@@ -50,7 +51,7 @@ Gemini CLI reads MCP servers from `.gemini/settings.json` (project) or `~/.gemin
 Generate/update project config via the installer:
 
 ```bash
-node integrations/npm/aro-installer/bin/aro.js init gemini-cli --scope project --runs-root ~/.ar/runs --mode ro
+npx --yes ./integrations/npm/aro-installer init gemini-cli --scope project --runs-root ~/.ar/runs --mode ro
 ```
 
 The MCP prompt name is the same (`orchestrator_prompt`) and appears as a slash command in Gemini CLI (see `integrations/codex/skills/agentic-research-orchestrator/references/gemini-cli.md`).
