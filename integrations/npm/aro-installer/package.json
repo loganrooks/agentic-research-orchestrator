@@ -1,6 +1,6 @@
 {
   "name": "aro-installer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Installer + config generator for agentic-research-orchestrator (MCP + Codex skill).",
   "license": "MIT",
   "bin": {

@@ -26,6 +26,16 @@ Interactive setup (TTY required):
 npx --yes ./integrations/npm/aro-installer setup
 ```
 
+The setup wizard supports tiers:
+- `--tier profile` (no customization; pick a profile)
+- `--tier custom` (some customization)
+- `--tier advanced` (full control)
+
+And profiles:
+- `--profile safe`
+- `--profile standard`
+- `--profile global`
+
 Non-interactive: install the Codex skill:
 
 ```bash

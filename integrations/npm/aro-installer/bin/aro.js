@@ -58,7 +58,8 @@ Usage:
   aro init claude-code --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
   aro init gemini-cli --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
 
-  aro setup   # interactive wizard (requires TTY)
+  aro setup [--tier <profile|custom|advanced>] [--profile <safe|standard|global>]
+             # interactive wizard (requires TTY)
 
 Notes:
   - Default --runs-root is ~/.ar/runs
@@ -105,20 +106,24 @@ function ensureObjectField(obj, key, filePathForErrors) {
   return obj[key];
 }
 
-function makeAroServerDef({ pythonCmd, runsRootAbs, writeEnabled }) {
+function makeAroServerDef({ pythonCmd, runsRootAbs, writeEnabled, maxCallsPerMinute }) {
   const args = ["-m", "ar", "mcp", "serve"];
   if (writeEnabled) args.push("--write-enabled");
   args.push("--allow-run-dir-prefix", runsRootAbs);
+  const m = Number(maxCallsPerMinute || 0);
+  if (Number.isFinite(m) && m > 0) {
+    args.push("--max-calls-per-minute", String(Math.floor(m)));
+  }
   return { command: pythonCmd, args };
 }
 
-function addServersToConfig({ config, baseName, pythonCmd, runsRootAbs, mode }) {
+function addServersToConfig({ config, baseName, pythonCmd, runsRootAbs, mode, maxCallsPerMinute }) {
   const mcpServers = ensureObjectField(config, "mcpServers", "<config>");
   if (mode === "ro" || mode === "both") {
-    mcpServers[`${baseName}_ro`] = makeAroServerDef({ pythonCmd, runsRootAbs, writeEnabled: false });
+    mcpServers[`${baseName}_ro`] = makeAroServerDef({ pythonCmd, runsRootAbs, writeEnabled: false, maxCallsPerMinute });
   }
   if (mode === "rw" || mode === "both") {
-    mcpServers[`${baseName}_rw`] = makeAroServerDef({ pythonCmd, runsRootAbs, writeEnabled: true });
+    mcpServers[`${baseName}_rw`] = makeAroServerDef({ pythonCmd, runsRootAbs, writeEnabled: true, maxCallsPerMinute });
   }
   return config;
 }
@@ -137,13 +142,25 @@ function installCodexSkill({ skillName, destRoot, force }) {
   return destSkill;
 }
 
-function initClient({ client, scope, projectRoot, runsRootAbs, pythonCmd, mode, baseName }) {
+function _backupFileIfExists(p, ts) {
+  if (!fs.existsSync(p)) return;
+  const b = `${p}.bak.${ts}`;
+  fs.copyFileSync(p, b);
+}
+
+function _backupTs() {
+  // 20260303T203012Z
+  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z").replace("T", "T");
+}
+
+function initClient({ client, scope, projectRoot, runsRootAbs, pythonCmd, mode, baseName, maxCallsPerMinute, backupExisting }) {
   if (!["project", "user", "both"].includes(scope)) die("Invalid scope");
   if (!["ro", "rw", "both"].includes(mode)) die("Invalid mode");
 
   const scopes = scope === "both" ? ["user", "project"] : [scope];
   const configPaths = [];
 
+  const ts = backupExisting ? _backupTs() : "";
   for (const sc of scopes) {
     if (client === "claude-code") {
       configPaths.push(sc === "project" ? path.join(projectRoot, ".mcp.json") : path.join(os.homedir(), ".claude.json"));
@@ -159,11 +176,12 @@ function initClient({ client, scope, projectRoot, runsRootAbs, pythonCmd, mode, 
   }
 
   for (const configPath of configPaths) {
+    if (backupExisting) _backupFileIfExists(configPath, ts);
     const config = readJsonIfExists(configPath);
     if (config.mcpServers !== undefined) {
       ensureObjectField(config, "mcpServers", configPath);
     }
-    addServersToConfig({ config, baseName, pythonCmd, runsRootAbs, mode });
+    addServersToConfig({ config, baseName, pythonCmd, runsRootAbs, mode, maxCallsPerMinute });
     writeJson(configPath, config);
   }
   return configPaths;
@@ -199,7 +217,7 @@ function cmdInit(argv) {
 
   if (!["ro", "rw", "both"].includes(mode)) die("Invalid --mode. Expected: ro | rw | both");
 
-  const configPaths = initClient({ client, scope, projectRoot, runsRootAbs, pythonCmd, mode, baseName });
+  const configPaths = initClient({ client, scope, projectRoot, runsRootAbs, pythonCmd, mode, baseName, maxCallsPerMinute: 0, backupExisting: false });
   for (const configPath of configPaths) {
     process.stdout.write(`Updated ${client} MCP config: ${configPath}\n`);
   }
@@ -224,6 +242,28 @@ function _rl() {
   return readline.createInterface({ input: process.stdin, output: process.stdout });
 }
 
+async function _pickOne(question, options, defId) {
+  const idxDefault = Math.max(
+    0,
+    options.findIndex((o) => o.id === defId),
+  );
+  process.stdout.write(question + "\n");
+  for (let i = 0; i < options.length; i++) {
+    const o = options[i];
+    const suffix = i === idxDefault ? " (default)" : "";
+    process.stdout.write(`  ${i + 1}) ${o.label}${suffix}\n`);
+  }
+  const ans = (await _ask("Choice", String(idxDefault + 1))).trim();
+  const t = ans.toLowerCase();
+  const asNum = parseInt(t, 10);
+  if (!Number.isNaN(asNum) && asNum >= 1 && asNum <= options.length) {
+    return options[asNum - 1];
+  }
+  const byId = options.find((o) => o.id === t || o.id.startsWith(t));
+  if (byId) return byId;
+  return options[idxDefault];
+}
+
 async function _ask(question, defVal = "") {
   const rl = _rl();
   const q = defVal ? `${question} (${defVal}): ` : `${question}: `;
@@ -242,49 +282,191 @@ async function _askYesNo(question, defVal) {
   return _yesNoDefault(ans, defVal);
 }
 
-async function cmdSetup() {
+function _defaultRunsRoot() {
+  return path.join(os.homedir(), ".ar", "runs");
+}
+
+function _setupProfiles() {
+  const base = {
+    installSkill: true,
+    doClaude: true,
+    doGemini: true,
+    scope: "project",
+    mode: "both",
+    baseName: "aro",
+    runsRootAbs: path.resolve(_defaultRunsRoot()),
+    pythonCmd: "python3",
+    maxCallsPerMinute: 60,
+    backupExisting: true,
+    skillDestRoot: defaultCodexSkillsRoot(),
+    skillForce: false,
+  };
+  return [
+    {
+      id: "safe",
+      label: "Safe (project, Claude Code, read-only)",
+      defaults: { ...base, doGemini: false, scope: "project", mode: "ro" },
+    },
+    {
+      id: "standard",
+      label: "Standard (project, Claude+Gemini, ro+rw)",
+      defaults: { ...base, scope: "project", mode: "both" },
+    },
+    {
+      id: "global",
+      label: "Everywhere (user+project, Claude+Gemini, ro+rw)",
+      defaults: { ...base, scope: "both", mode: "both" },
+    },
+  ];
+}
+
+function _printSetupSummary(cfg, projectRoot) {
+  const scopeText = cfg.scope === "both" ? "user + project" : cfg.scope;
+  const servers = [];
+  if (cfg.mode === "ro" || cfg.mode === "both") servers.push(`${cfg.baseName}_ro`);
+  if (cfg.mode === "rw" || cfg.mode === "both") servers.push(`${cfg.baseName}_rw`);
+
+  process.stdout.write("\nPlanned changes:\n");
+  if (cfg.installSkill) {
+    process.stdout.write(`- Codex skill -> ${path.join(cfg.skillDestRoot, "agentic-research-orchestrator")}\n`);
+  }
+  if (cfg.doClaude) {
+    process.stdout.write(`- Claude Code MCP (${scopeText})\n`);
+  }
+  if (cfg.doGemini) {
+    process.stdout.write(`- Gemini CLI MCP (${scopeText})\n`);
+  }
+  process.stdout.write(`- MCP servers: ${servers.join(", ") || "(none)"}\n`);
+  process.stdout.write(`- Runs confinement: ${cfg.runsRootAbs}\n`);
+  process.stdout.write(`- Command: ${cfg.pythonCmd} -m ar mcp serve ...\n`);
+  if (cfg.maxCallsPerMinute) process.stdout.write(`- Rate limit: ${cfg.maxCallsPerMinute} calls/min\n`);
+  if (cfg.scope !== "user") process.stdout.write(`- Project root: ${projectRoot}\n`);
+  if (cfg.backupExisting) process.stdout.write("- Backups: enabled (.bak.<ts>)\n");
+}
+
+async function cmdSetup(argv) {
   _requireTty();
+
+  const { flags } = parseFlags(argv || []);
 
   process.stdout.write("aro-installer setup (interactive)\n\n");
 
-  const installSkill = await _askYesNo("Install Codex skill to ~/.codex/skills?", true);
-  const doClaude = await _askYesNo("Configure Claude Code MCP?", true);
-  const doGemini = await _askYesNo("Configure Gemini CLI MCP?", true);
+  const tierOpt = [
+    { id: "profile", label: "Profile (no customization)" },
+    { id: "custom", label: "Custom (some customization)" },
+    { id: "advanced", label: "Advanced (full control)" },
+  ];
+  let tier = String(flags.tier || "").trim().toLowerCase();
+  if (!tier) tier = (await _pickOne("Select setup tier:", tierOpt, "profile")).id;
+  if (!["profile", "custom", "advanced"].includes(tier)) die("Invalid --tier. Expected: profile | custom | advanced");
 
-  const scope = (await _ask("Install scope for MCP configs (project|user|both)", "project")).trim() || "project";
-  if (!["project", "user", "both"].includes(scope)) die("Invalid scope; expected project|user|both");
+  const profiles = _setupProfiles();
+  let profileId = String(flags.profile || "").trim().toLowerCase();
+  let profile = profiles.find((p) => p.id === profileId);
+  if (!profile) {
+    profile = await _pickOne("Select a base profile:", profiles.map((p) => ({ id: p.id, label: p.label })), "standard");
+    profile = profiles.find((p) => p.id === profile.id) || profiles[0];
+  }
 
-  const projectRoot = path.resolve(expandHome(await _ask("Project root (used for project scope)", process.cwd())));
-  const runsRootAbs = path.resolve(expandHome(await _ask("Runs root (for --allow-run-dir-prefix)", path.join(os.homedir(), ".ar", "runs"))));
-  const pythonCmd = (await _ask("Python command/path (must have agentic-research-orchestrator installed)", "python3")).trim() || "python3";
-  const mode = (await _ask("MCP server mode (ro|rw|both)", "ro")).trim() || "ro";
-  if (!["ro", "rw", "both"].includes(mode)) die("Invalid mode; expected ro|rw|both");
-  const baseName = (await _ask("Server name base (prefix for *_ro/*_rw)", "aro")).trim() || "aro";
+  const cfg = { ...profile.defaults };
+  let projectRoot = path.resolve(process.cwd());
 
-  if (installSkill) {
-    const destRoot = defaultCodexSkillsRoot();
-    const existing = path.join(destRoot, "agentic-research-orchestrator");
-    const force = fs.existsSync(existing)
-      ? await _askYesNo(`Codex skill already exists at ${existing}. Overwrite?`, false)
-      : false;
+  if (tier === "profile") {
+    if (cfg.scope !== "user") {
+      projectRoot = path.resolve(process.cwd());
+    }
+  } else if (tier === "custom") {
+    cfg.installSkill = await _askYesNo("Install Codex skill?", cfg.installSkill);
+    cfg.doClaude = await _askYesNo("Configure Claude Code MCP?", cfg.doClaude);
+    cfg.doGemini = await _askYesNo("Configure Gemini CLI MCP?", cfg.doGemini);
+
+    cfg.scope = (await _ask("Install scope for MCP configs (project|user|both)", cfg.scope)).trim() || cfg.scope;
+    if (!["project", "user", "both"].includes(cfg.scope)) die("Invalid scope; expected project|user|both");
+
+    if (cfg.scope !== "user") {
+      projectRoot = path.resolve(expandHome(await _ask("Project root (used for project scope)", process.cwd())));
+    }
+    cfg.runsRootAbs = path.resolve(expandHome(await _ask("Runs root (for --allow-run-dir-prefix)", cfg.runsRootAbs)));
+    cfg.pythonCmd = (await _ask("Python command/path (must have agentic-research-orchestrator installed)", cfg.pythonCmd)).trim() || cfg.pythonCmd;
+    cfg.mode = (await _ask("MCP server mode (ro|rw|both)", cfg.mode)).trim() || cfg.mode;
+    if (!["ro", "rw", "both"].includes(cfg.mode)) die("Invalid mode; expected ro|rw|both");
+    cfg.baseName = (await _ask("Server name base (prefix for *_ro/*_rw)", cfg.baseName)).trim() || cfg.baseName;
+  } else {
+    cfg.installSkill = await _askYesNo("Install Codex skill?", cfg.installSkill);
+    cfg.skillDestRoot = path.resolve(expandHome(await _ask("Codex skills root", cfg.skillDestRoot)));
+    cfg.skillForce = await _askYesNo("Overwrite Codex skill if it already exists?", cfg.skillForce);
+
+    cfg.doClaude = await _askYesNo("Configure Claude Code MCP?", cfg.doClaude);
+    cfg.doGemini = await _askYesNo("Configure Gemini CLI MCP?", cfg.doGemini);
+
+    cfg.scope = (await _ask("Install scope for MCP configs (project|user|both)", cfg.scope)).trim() || cfg.scope;
+    if (!["project", "user", "both"].includes(cfg.scope)) die("Invalid scope; expected project|user|both");
+
+    if (cfg.scope !== "user") {
+      projectRoot = path.resolve(expandHome(await _ask("Project root (used for project scope)", process.cwd())));
+    }
+    cfg.runsRootAbs = path.resolve(expandHome(await _ask("Runs root (for --allow-run-dir-prefix)", cfg.runsRootAbs)));
+    cfg.pythonCmd = (await _ask("Python command/path (must have agentic-research-orchestrator installed)", cfg.pythonCmd)).trim() || cfg.pythonCmd;
+    cfg.mode = (await _ask("MCP server mode (ro|rw|both)", cfg.mode)).trim() || cfg.mode;
+    if (!["ro", "rw", "both"].includes(cfg.mode)) die("Invalid mode; expected ro|rw|both");
+    cfg.baseName = (await _ask("Server name base (prefix for *_ro/*_rw)", cfg.baseName)).trim() || cfg.baseName;
+
+    cfg.maxCallsPerMinute = parseInt(await _ask("MCP max calls per minute (0 = default)", String(cfg.maxCallsPerMinute)), 10);
+    if (Number.isNaN(cfg.maxCallsPerMinute) || cfg.maxCallsPerMinute < 0) die("Invalid max calls per minute");
+    cfg.backupExisting = await _askYesNo("Backup existing MCP config files before editing?", cfg.backupExisting);
+  }
+
+  _printSetupSummary(cfg, projectRoot);
+  const ok = await _askYesNo("Proceed?", true);
+  if (!ok) {
+    process.stdout.write("Aborted.\n");
+    return;
+  }
+
+  if (cfg.installSkill) {
+    const existing = path.join(cfg.skillDestRoot, "agentic-research-orchestrator");
+    let force = cfg.skillForce;
+    if (!force && fs.existsSync(existing)) {
+      force = await _askYesNo(`Codex skill already exists at ${existing}. Overwrite?`, false);
+    }
     if (!fs.existsSync(existing) || force) {
-      const destSkill = installCodexSkill({ skillName: "agentic-research-orchestrator", destRoot, force });
+      const destSkill = installCodexSkill({ skillName: "agentic-research-orchestrator", destRoot: cfg.skillDestRoot, force });
       process.stdout.write(`\nInstalled Codex skill: ${destSkill}\nRestart Codex to pick up new skills.\n`);
     } else {
       process.stdout.write("\nSkipped Codex skill install.\n");
     }
   }
 
-  if (doClaude) {
-    const paths = initClient({ client: "claude-code", scope, projectRoot, runsRootAbs, pythonCmd, mode, baseName });
+  if (cfg.doClaude) {
+    const paths = initClient({
+      client: "claude-code",
+      scope: cfg.scope,
+      projectRoot,
+      runsRootAbs: cfg.runsRootAbs,
+      pythonCmd: cfg.pythonCmd,
+      mode: cfg.mode,
+      baseName: cfg.baseName,
+      maxCallsPerMinute: cfg.maxCallsPerMinute,
+      backupExisting: cfg.backupExisting,
+    });
     for (const p of paths) process.stdout.write(`\nUpdated claude-code MCP config: ${p}\n`);
   }
-  if (doGemini) {
-    const paths = initClient({ client: "gemini-cli", scope, projectRoot, runsRootAbs, pythonCmd, mode, baseName });
+  if (cfg.doGemini) {
+    const paths = initClient({
+      client: "gemini-cli",
+      scope: cfg.scope,
+      projectRoot,
+      runsRootAbs: cfg.runsRootAbs,
+      pythonCmd: cfg.pythonCmd,
+      mode: cfg.mode,
+      baseName: cfg.baseName,
+      maxCallsPerMinute: cfg.maxCallsPerMinute,
+      backupExisting: cfg.backupExisting,
+    });
     for (const p of paths) process.stdout.write(`\nUpdated gemini-cli MCP config: ${p}\n`);
   }
 
-  process.stdout.write(`\nRuns confinement: ${runsRootAbs}\n`);
+  process.stdout.write(`\nRuns confinement: ${cfg.runsRootAbs}\n`);
   process.stdout.write("Done.\n");
 }
 
