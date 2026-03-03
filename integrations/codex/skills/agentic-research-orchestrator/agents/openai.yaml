@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agentic Research Orchestrator"
+  short_description: "Run bundles + MCP orchestration workflows"
+  default_prompt: "Help me run an agentic research workflow using agentic-research-orchestrator (CLI + MCP)."
