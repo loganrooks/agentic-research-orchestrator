@@ -60,3 +60,11 @@ def test_scaffold_creates_required_structure(tmp_path: Path) -> None:
     assert cfg["runner_plan"]["required"] == ["codex"]
     assert "optional" in cfg["runner_plan"]
 
+
+def test_scaffold_requires_slug_or_goal(tmp_path: Path) -> None:
+    r = _run_ar(
+        ["run", "scaffold", "--runs-root", str(tmp_path)],
+        env_extra={"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "abcdef1234"},
+    )
+    assert r.returncode == 2
+    assert "requires --slug or --goal" in (r.stdout + r.stderr)

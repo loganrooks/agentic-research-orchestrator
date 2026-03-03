@@ -54,3 +54,26 @@ def test_validate_fails_on_missing_producer_files(tmp_path: Path) -> None:
     assert r_val.returncode == 30
     assert "PROVENANCE.json" in (r_val.stdout + r_val.stderr)
 
+
+def test_validate_warns_when_merge_missing(tmp_path: Path) -> None:
+    env_fixed = {"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "abcdef1234"}
+    r_scaffold = _run_ar(
+        ["run", "scaffold", "--runs-root", str(tmp_path), "--slug", "test-run", "--goal", "Test goal"],
+        env_extra=env_fixed,
+    )
+    assert r_scaffold.returncode == 0
+    run_dir = Path(r_scaffold.stdout.strip())
+
+    report_src = tmp_path / "report.md"
+    report_src.write_text("# Report\n\nHello.\n", encoding="utf-8")
+
+    r_import = _run_ar(
+        ["run", "import", "--run-dir", str(run_dir), "--task", "T-0001", "--runner", "codex", "--report-path", str(report_src)],
+        env_extra={"AR_FIXED_NOW": "2026-03-02T12:35:00-05:00"},
+    )
+    assert r_import.returncode == 0, (r_import.stdout, r_import.stderr)
+
+    r_val = _run_ar(["run", "validate", "--run-dir", str(run_dir)])
+    assert r_val.returncode == 0, (r_val.stdout, r_val.stderr)
+    assert "merge artifacts are missing" in r_val.stdout
+    assert "COMPARISON.json" in r_val.stdout
