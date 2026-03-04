@@ -46,3 +46,23 @@ def test_export_prompts_writes_one_file_per_task(tmp_path: Path) -> None:
     assert "Residuals / Open Questions" in t1
     assert "# Task T-0001: Alpha" in t1
 
+
+def test_export_prompts_supports_claude_code_runner(tmp_path: Path) -> None:
+    env_fixed = {"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "abcdef1234"}
+    r_scaffold = _run_ar(
+        ["run", "scaffold", "--runs-root", str(tmp_path), "--slug", "test-run", "--goal", "Test goal"],
+        env_extra=env_fixed,
+    )
+    assert r_scaffold.returncode == 0, (r_scaffold.stdout, r_scaffold.stderr)
+    run_dir = Path(r_scaffold.stdout.strip())
+
+    tasks_dir = run_dir / "10_TASKS"
+    (tasks_dir / "T-0001__alpha.md").write_text("# Task T-0001: Alpha\n\nDo A.\n", encoding="utf-8")
+
+    r_export = _run_ar(["run", "export-prompts", "--run-dir", str(run_dir), "--runner", "claude_code"])
+    assert r_export.returncode == 0, (r_export.stdout, r_export.stderr)
+
+    out_dir = run_dir / "11_EXPORT" / "claude_code"
+    assert out_dir.is_dir()
+    t1 = (out_dir / "T-0001__alpha.md").read_text(encoding="utf-8")
+    assert "runner=claude_code" in t1
