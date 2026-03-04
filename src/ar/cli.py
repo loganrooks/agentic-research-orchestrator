@@ -40,7 +40,14 @@ def _build_parser() -> argparse.ArgumentParser:
     scaffold.add_argument("--runs-root", default="", help="Override runs root (default AR_RUNS_ROOT or ~/.ar/runs)")
     scaffold.add_argument("--slug", default="", help="Run slug (kebab-case). Optional if --goal is provided.")
     scaffold.add_argument("--goal", default="", help="Short statement of the decision/goal this run supports.")
-    scaffold.add_argument("--targets", action="append", default=[], help="Target path (repeatable).")
+    scaffold.add_argument(
+        "--context-anchor",
+        "--targets",
+        dest="context_anchors",
+        action="append",
+        default=[],
+        help="Context anchor path (repeatable). (--targets is deprecated)",
+    )
 
     scaffold.add_argument(
         "--required-runner",
