@@ -3,6 +3,15 @@
   "version": "0.1.2",
   "description": "Installer + config generator for agentic-research-orchestrator (MCP + Codex skill).",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/loganrooks/agentic-research-orchestrator",
+    "directory": "integrations/npm/aro-installer"
+  },
+  "bugs": {
+    "url": "https://github.com/loganrooks/agentic-research-orchestrator/issues"
+  },
+  "homepage": "https://github.com/loganrooks/agentic-research-orchestrator/tree/main/integrations/npm/aro-installer",
   "bin": {
     "aro": "bin/aro.js",
     "aro-installer": "bin/aro.js"
