@@ -41,6 +41,24 @@ Restart Codex after installing.
 
 ---
 
+## Claude Code skill
+
+Claude Code supports "skills" (Agent Skills) discovered from:
+- user: `~/.claude/skills/<skill>/SKILL.md`
+- project: `.claude/skills/<skill>/SKILL.md`
+
+Install this repo's ARO skill into Claude Code via the installer:
+
+```bash
+# user scope
+npx --yes aro-installer install claude-code-skill --scope user
+
+# project scope (run from your project root, or pass --project-root)
+npx --yes aro-installer install claude-code-skill --scope project --project-root .
+```
+
+---
+
 ## Claude Code (project MCP)
 
 Create `.mcp.json` in your project root with an `mcpServers` entry that runs:

@@ -71,6 +71,9 @@ Primary references:
 3. **Installer/config generator (Node, no deps)**
    - Add `integrations/npm/aro-installer/` with a small CLI:
      - `install codex-skill` → copy the skill into `~/.codex/skills` (or `$CODEX_HOME/skills`)
+     - `install claude-code-skill` → copy the same skill into Claude Code skills at:
+       - user: `~/.claude/skills/<skill>/`
+       - project: `<project>/.claude/skills/<skill>/`
      - `init claude-code` → update `.mcp.json` (project) or `~/.claude.json` (user)
      - `init gemini-cli` → update `.gemini/settings.json` (project) or `~/.gemini/settings.json` (user)
    - Support safe “modes”:
@@ -112,4 +115,3 @@ Primary references:
 - Publish `aro-installer` as a real npm package (remove `"private": true`, add metadata, add a `files` allowlist).
 - Add a `pipx`-first installation recipe (or `uv tool install`) so `ar` is reliably on PATH for MCP clients.
 - Package a Claude Desktop extension (`.mcpb`) that bundles config + a server command in a UX-friendly way.
-
