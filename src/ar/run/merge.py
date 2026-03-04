@@ -383,6 +383,7 @@ def run_merge(args: object) -> int:
     merge_root = run_dir / "30_MERGE"
     if not work_root.exists():
         sys.stderr.write(f"[ERROR] missing 20_WORK/: {work_root}\n")
+        _try_update_state(run_dir, status="failed", current_step="merge")
         return 21
     merge_root.mkdir(parents=True, exist_ok=True)
 
@@ -433,12 +434,14 @@ def run_merge(args: object) -> int:
                 s = _summarize_producer(producer_dir, allow_missing_registers=allow_missing)
             except Exception as e:
                 sys.stderr.write(f"[ERROR] failed to summarize {producer_dir}: {e}\n")
+                _try_update_state(run_dir, status="failed", current_step="merge")
                 return 21
 
             # Residuals are required by contract.
             res_path = producer_dir / "RESIDUALS.md"
             if not res_path.exists():
                 sys.stderr.write(f"[ERROR] missing required producer artifact: {res_path}\n")
+                _try_update_state(run_dir, status="failed", current_step="merge")
                 return 21
             residuals_out.append({"task_id": task_id, "producer_id": s.producer_id, "text": res_path.read_text(encoding="utf-8")})
 
@@ -635,6 +638,7 @@ def run_merge(args: object) -> int:
     )
 
     if conflicts_present:
+        _try_update_state(run_dir, status="partial", current_step="merge")
         _append_log(
             run_dir,
             {
@@ -654,6 +658,7 @@ def run_merge(args: object) -> int:
         sys.stdout.write("[WARN] merged (conflicts detected; see 30_MERGE/CONFLICTS.md)\n")
         return 11
 
+    _try_update_state(run_dir, status="running", current_step="merge", preserve_statuses={"partial"})
     _append_log(
         run_dir,
         {
