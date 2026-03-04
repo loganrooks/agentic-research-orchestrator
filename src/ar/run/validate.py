@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -171,6 +172,82 @@ def _safe_load_json_array(path: Path) -> list[Any]:
         return obj
     raise ValueError(f"Expected JSON array: {path}")
 
+_MD_HEADING_RE = re.compile(r"^\s*(#{1,6})\s+(.*?)\s*$")
+_HEADING_NORM_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _normalize_heading(s: str) -> str:
+    s = s.strip().lower()
+    s = _HEADING_NORM_RE.sub(" ", s).strip()
+    return " ".join(s.split())
+
+
+def _extract_markdown_headings(md: str) -> set[str]:
+    out: set[str] = set()
+    for line in md.splitlines():
+        m = _MD_HEADING_RE.match(line)
+        if not m:
+            continue
+        heading = m.group(2).strip()
+        if not heading:
+            continue
+        out.add(_normalize_heading(heading))
+    return out
+
+
+def _has_heading_prefix(headings: set[str], prefixes: list[str]) -> bool:
+    for h in headings:
+        for pref in prefixes:
+            if h == pref or h.startswith(pref + " "):
+                return True
+    return False
+
+
+def _validate_tasks(run_dir: Path) -> list[ValidationFinding]:
+    tasks_dir = run_dir / "10_TASKS"
+    if not tasks_dir.exists():
+        return []
+
+    findings: list[ValidationFinding] = []
+
+    required: list[tuple[str, list[str]]] = [
+        ("Intent", ["intent"]),
+        ("Deliverables", ["deliverables"]),
+        ("Evidence posture", ["evidence posture", "evidence"]),
+        ("Contradiction protocol", ["contradiction protocol", "conflict protocol", "contradictions"]),
+        ("Try-to-falsify / probes", ["try to falsify", "assumptions falsification probes", "falsification probes", "probes"]),
+        ("Output format", ["output format"]),
+        ("Stop rules / constraints", ["stop rules", "constraints"]),
+    ]
+
+    for p in sorted([x for x in tasks_dir.iterdir() if x.is_file() and x.name.endswith(".md")]):
+        try:
+            md = p.read_text(encoding="utf-8")
+        except Exception:
+            findings.append(ValidationFinding("warn", "could not read task file for linting", str(p)))
+            continue
+
+        headings = _extract_markdown_headings(md)
+        if not headings:
+            findings.append(ValidationFinding("warn", "task appears to have no markdown headings", str(p)))
+            continue
+
+        missing: list[str] = []
+        for label, prefixes in required:
+            if not _has_heading_prefix(headings, prefixes):
+                missing.append(label)
+
+        if missing:
+            findings.append(
+                ValidationFinding(
+                    "warn",
+                    "task missing recommended headings: " + ", ".join(missing),
+                    str(p),
+                )
+            )
+
+    return findings
+
 
 def _validate_merge_outputs(run_dir: Path, producers: list[Path]) -> list[ValidationFinding]:
     """
@@ -280,6 +357,7 @@ def run_validate(args: object) -> int:
 
     findings: list[ValidationFinding] = []
     findings.extend(_validate_run_structure(run_dir))
+    findings.extend(_validate_tasks(run_dir))
 
     _try_update_state(run_dir, current_step="validate")
 
