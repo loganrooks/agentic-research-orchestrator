@@ -69,6 +69,43 @@ def _normalize_text(v: object) -> str:
     return " ".join(v.split()).strip().lower()
 
 
+def _normalize_key(v: object) -> str:
+    """
+    Normalize keys intended for cross-producer matching (e.g., topic_key).
+    Keep this conservative and deterministic (no ML/LLM inference).
+    """
+    if not isinstance(v, str):
+        return ""
+    s = v.strip().lower()
+    s = "_".join(s.split())
+    s = s.replace("-", "_")
+    while "__" in s:
+        s = s.replace("__", "_")
+    return s
+
+
+def _is_generic_claim_id(claim_id: str) -> bool:
+    """
+    Producer-local ids like C-0001 are not comparable across producers.
+    """
+    cid = claim_id.strip().upper()
+    return bool(cid.startswith("C-") and cid[2:].isdigit())
+
+
+def _claim_match_key(claim: dict[str, Any]) -> str:
+    topic_key = claim.get("topic_key")
+    if isinstance(topic_key, str) and topic_key.strip():
+        return "topic_key:" + _normalize_key(topic_key)
+
+    cid = claim.get("claim_id")
+    if isinstance(cid, str):
+        cid = cid.strip()
+        if cid and not _is_generic_claim_id(cid):
+            return "claim_id:" + _normalize_key(cid)
+
+    return ""
+
+
 def _source_dedupe_key(src: dict[str, Any]) -> str:
     url = src.get("url")
     if isinstance(url, str) and url.strip():
@@ -422,7 +459,7 @@ def run_merge(args: object) -> int:
         producers: list[dict[str, Any]] = []
         producer_has_counterexamples: dict[str, bool] = {}
 
-        # Track claim collisions within this task by original claim_id.
+        # Track comparable claims within this task by a stable match key (topic_key preferred).
         task_claim_groups: dict[str, list[str]] = {}
 
         comparison_md_lines.append(f"## {task_id}\n")
@@ -503,8 +540,9 @@ def run_merge(args: object) -> int:
 
                 merged_claims.append(out_claim)
                 claim_by_id[merged_id] = out_claim
-                if original_claim_id:
-                    task_claim_groups.setdefault(original_claim_id, []).append(merged_id)
+                match_key = _claim_match_key(cl)
+                if match_key:
+                    task_claim_groups.setdefault(match_key, []).append(merged_id)
 
             tu = s.token_usage or {}
             tokens_total = tu.get("total")
@@ -556,22 +594,26 @@ def run_merge(args: object) -> int:
                     }
                 )
 
-        # Conflicts: same original claim_id disagrees across producers.
-        for ocid in sorted(task_claim_groups.keys()):
-            mids = task_claim_groups[ocid]
+        # Agreements/conflicts: same match key disagrees across producers.
+        for match_key in sorted(task_claim_groups.keys()):
+            mids = task_claim_groups[match_key]
             if len(mids) < 2:
+                continue
+            distinct_producers = {str(claim_by_id[mid].get("producer_id") or "") for mid in mids}
+            distinct_producers = {p for p in distinct_producers if p}
+            if len(distinct_producers) < 2:
                 continue
             uniq = {_normalize_text(claim_by_id[mid].get("recommendation") or claim_by_id[mid].get("claim")) for mid in mids}
             uniq = {x for x in uniq if x}
             if len(uniq) <= 1:
-                agreements_out.append({"task_id": task_id, "original_claim_id": ocid, "claim_ids": mids})
+                agreements_out.append({"task_id": task_id, "original_claim_id": match_key, "claim_ids": mids})
                 continue
 
             conflicts_present = True
             divergences.append(
                 {
                     "type": "conflict",
-                    "summary": f"Producers disagree for original claim_id {ocid}.",
+                    "summary": f"Producers disagree for match key {match_key}.",
                     "affected_claim_ids": mids,
                     "notes": "",
                 }
@@ -579,8 +621,8 @@ def run_merge(args: object) -> int:
             conflicts_out.append(
                 {
                     "task_id": task_id,
-                    "original_claim_id": ocid,
-                    "summary": "Incompatible recommendations/claims for the same claim id.",
+                    "original_claim_id": match_key,
+                    "summary": "Incompatible recommendations/claims for the same match key.",
                     "affected_claim_ids": mids,
                     "claims": [claim_by_id[mid] for mid in mids],
                 }
@@ -597,7 +639,7 @@ def run_merge(args: object) -> int:
                 else:
                     assumptions_sets.append(set())
             if assumptions_sets and all(assumptions_sets) and set.intersection(*assumptions_sets) == set():
-                context_split_candidates_out.append({"task_id": task_id, "original_claim_id": ocid, "claim_ids": mids})
+                context_split_candidates_out.append({"task_id": task_id, "original_claim_id": match_key, "claim_ids": mids})
 
         comparison_md_lines.append("")
         if divergences:

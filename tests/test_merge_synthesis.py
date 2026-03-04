@@ -52,6 +52,7 @@ def test_merge_preserves_conflicts_and_emits_divergence(tmp_path: Path) -> None:
             [
                 {
                     "claim_id": "C-0001",
+                    "topic_key": "worktrees_policy",
                     "area": "worktrees",
                     "claim": "Worktrees reduce integration friction for parallel work.",
                     "recommendation": "Use git worktrees for parallel feature work.",
@@ -70,6 +71,7 @@ def test_merge_preserves_conflicts_and_emits_divergence(tmp_path: Path) -> None:
             [
                 {
                     "claim_id": "C-0001",
+                    "topic_key": "worktrees_policy",
                     "area": "worktrees",
                     "claim": "Worktrees increase entropy and slow small changes.",
                     "recommendation": "Avoid worktrees; use short-lived feature branches.",
@@ -155,6 +157,108 @@ def test_merge_preserves_conflicts_and_emits_divergence(tmp_path: Path) -> None:
     comp = json.loads((run_dir / "30_MERGE" / "COMPARISON.json").read_text(encoding="utf-8"))
     t = next(t for t in comp["tasks"] if t["task_id"] == "T-0001")
     assert any(d.get("type") == "conflict" for d in t.get("divergences", []))
+
+
+def test_merge_does_not_infer_conflict_from_generic_claim_id_collision_without_topic_key(tmp_path: Path) -> None:
+    env_fixed = {"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "abcdef1234"}
+    r_scaffold = _run_ar(
+        ["run", "scaffold", "--runs-root", str(tmp_path), "--slug", "test-run", "--goal", "Test goal"],
+        env_extra=env_fixed,
+    )
+    assert r_scaffold.returncode == 0, (r_scaffold.stdout, r_scaffold.stderr)
+    run_dir = Path(r_scaffold.stdout.strip())
+
+    report_a = tmp_path / "a.md"
+    report_a.write_text("# A\n", encoding="utf-8")
+    report_b = tmp_path / "b.md"
+    report_b.write_text("# B\n", encoding="utf-8")
+
+    claims_a = tmp_path / "claims_a.json"
+    claims_a.write_text(
+        json.dumps(
+            [
+                {
+                    "claim_id": "C-0001",
+                    "area": "worktrees",
+                    "claim": "Worktrees reduce integration friction for parallel work.",
+                    "recommendation": "Use git worktrees for parallel feature work.",
+                }
+            ],
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    claims_b = tmp_path / "claims_b.json"
+    claims_b.write_text(
+        json.dumps(
+            [
+                {
+                    "claim_id": "C-0001",
+                    "area": "worktrees",
+                    "claim": "Worktrees increase entropy and slow small changes.",
+                    "recommendation": "Avoid worktrees; use short-lived feature branches.",
+                }
+            ],
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    residuals = tmp_path / "res.md"
+    residuals.write_text("Residuals: none\n", encoding="utf-8")
+
+    r_imp_a = _run_ar(
+        [
+            "run",
+            "import",
+            "--run-dir",
+            str(run_dir),
+            "--task",
+            "T-0001",
+            "--runner",
+            "claude_desktop",
+            "--report-path",
+            str(report_a),
+            "--claims-path",
+            str(claims_a),
+            "--residuals-path",
+            str(residuals),
+        ]
+    )
+    assert r_imp_a.returncode == 0, (r_imp_a.stdout, r_imp_a.stderr)
+    r_imp_b = _run_ar(
+        [
+            "run",
+            "import",
+            "--run-dir",
+            str(run_dir),
+            "--task",
+            "T-0001",
+            "--runner",
+            "gemini_deep_research",
+            "--report-path",
+            str(report_b),
+            "--claims-path",
+            str(claims_b),
+            "--residuals-path",
+            str(residuals),
+        ]
+    )
+    assert r_imp_b.returncode == 0, (r_imp_b.stdout, r_imp_b.stderr)
+
+    r_merge = _run_ar(["run", "merge", "--run-dir", str(run_dir)])
+    assert r_merge.returncode == 0, (r_merge.stdout, r_merge.stderr)
+
+    merged_claims = json.loads((run_dir / "30_MERGE" / "CLAIMS.json").read_text(encoding="utf-8"))
+    assert len(merged_claims) == 2
+    assert merged_claims[0].get("conflicts_with") == []
+    assert merged_claims[1].get("conflicts_with") == []
+
+    comp = json.loads((run_dir / "30_MERGE" / "COMPARISON.json").read_text(encoding="utf-8"))
+    t = next(t for t in comp["tasks"] if t["task_id"] == "T-0001")
+    assert not any(d.get("type") == "conflict" for d in t.get("divergences", []))
 
 
 def test_merge_works_with_single_producer(tmp_path: Path) -> None:
