@@ -61,6 +61,53 @@ def test_scaffold_creates_required_structure(tmp_path: Path) -> None:
     assert "optional" in cfg["runner_plan"]
 
 
+def test_scaffold_accepts_context_anchor_and_targets_alias(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir(parents=True, exist_ok=True)
+
+    env_fixed_1 = {"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "aaaaaa1111"}
+    r1 = _run_ar(
+        [
+            "run",
+            "scaffold",
+            "--runs-root",
+            str(tmp_path),
+            "--slug",
+            "test-run",
+            "--goal",
+            "Test goal",
+            "--context-anchor",
+            str(proj),
+        ],
+        env_extra=env_fixed_1,
+    )
+    assert r1.returncode == 0, (r1.stdout, r1.stderr)
+    run_dir_1 = Path(r1.stdout.strip())
+    cfg1 = json.loads((run_dir_1 / "01_CONFIG.json").read_text(encoding="utf-8"))
+    assert cfg1.get("targets") == [{"path": str(proj.resolve()), "label": proj.name}]
+
+    env_fixed_2 = {"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "bbbbbb2222"}
+    r2 = _run_ar(
+        [
+            "run",
+            "scaffold",
+            "--runs-root",
+            str(tmp_path),
+            "--slug",
+            "test-run",
+            "--goal",
+            "Test goal",
+            "--targets",
+            str(proj),
+        ],
+        env_extra=env_fixed_2,
+    )
+    assert r2.returncode == 0, (r2.stdout, r2.stderr)
+    run_dir_2 = Path(r2.stdout.strip())
+    cfg2 = json.loads((run_dir_2 / "01_CONFIG.json").read_text(encoding="utf-8"))
+    assert cfg2.get("targets") == [{"path": str(proj.resolve()), "label": proj.name}]
+
+
 def test_scaffold_requires_slug_or_goal(tmp_path: Path) -> None:
     r = _run_ar(
         ["run", "scaffold", "--runs-root", str(tmp_path)],
