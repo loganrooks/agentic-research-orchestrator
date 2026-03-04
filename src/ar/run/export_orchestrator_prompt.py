@@ -134,6 +134,15 @@ def _guided_task_markdown_template() -> str:
         "## Assumptions & falsification probes\n"
         "- Assumption: <A?>\n"
         "  - Falsify by: <probe that could prove it wrong>\n\n"
+        "## Evidence posture\n"
+        "What counts as strong evidence for this task?\n"
+        "What sources are likely to be misleading?\n\n"
+        "## Contradiction protocol\n"
+        "If you find conflicting claims:\n"
+        "1. state both claims precisely\n"
+        "2. infer the implied assumptions/context\n"
+        "3. do at least one additional targeted search to resolve/sharpen the contradiction\n"
+        "4. if unresolved, propose a probe that would resolve it\n\n"
         "## Constraints / budget\n"
         "- Time:\n"
         "- Cost:\n"
@@ -144,6 +153,11 @@ def _guided_task_markdown_template() -> str:
         "- SOURCES.json: <required fields>\n"
         "- CLAIMS.json: <required fields>\n"
         "- RESIDUALS.md: <what to put here>\n\n"
+        "## Output format\n"
+        "- Prefer JSON registers in fenced code blocks.\n"
+        "- If you cannot output JSON, use tables with stable IDs.\n\n"
+        "## Stop rules\n"
+        "- Max N searches OR stop when diminishing returns, but record deferred queries.\n\n"
         "## Notes\n"
         "<optional>\n"
     )
@@ -154,7 +168,7 @@ def _guided_plan_self_check_rubric() -> list[str]:
         "Output is a single JSON object (no prose, no fences).",
         "`schema_version=1`.",
         "Each action is `create_task` and uses a fresh `T-XXXX`.",
-        "Every task has at least one falsification probe.",
+        "Every task has at least one falsification probe and a contradiction protocol.",
         "Every task has explicit deliverables and constraints.",
     ]
 

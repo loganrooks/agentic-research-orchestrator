@@ -77,3 +77,71 @@ def test_validate_warns_when_merge_missing(tmp_path: Path) -> None:
     assert r_val.returncode == 0, (r_val.stdout, r_val.stderr)
     assert "merge artifacts are missing" in r_val.stdout
     assert "COMPARISON.json" in r_val.stdout
+
+
+def test_validate_warns_on_tasks_missing_recommended_headings(tmp_path: Path) -> None:
+    env_fixed = {"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "abcdef1234"}
+    r_scaffold = _run_ar(
+        ["run", "scaffold", "--runs-root", str(tmp_path), "--slug", "test-run", "--goal", "Test goal"],
+        env_extra=env_fixed,
+    )
+    assert r_scaffold.returncode == 0
+    run_dir = Path(r_scaffold.stdout.strip())
+
+    (run_dir / "10_TASKS" / "T-0001__weak.md").write_text(
+        "# Task T-0001: Weak\n\n## Intent\nDo the thing.\n\n## Deliverables\n- REPORT.md\n",
+        encoding="utf-8",
+    )
+
+    r_val = _run_ar(["run", "validate", "--run-dir", str(run_dir)])
+    assert r_val.returncode == 0, (r_val.stdout, r_val.stderr)
+    assert "task missing recommended headings" in r_val.stdout.lower()
+
+
+def test_validate_task_lint_passes_for_well_structured_task(tmp_path: Path) -> None:
+    env_fixed = {"AR_FIXED_NOW": "2026-03-02T12:34:56-05:00", "AR_FIXED_RUN_ID": "abcdef1234"}
+    r_scaffold = _run_ar(
+        ["run", "scaffold", "--runs-root", str(tmp_path), "--slug", "test-run", "--goal", "Test goal"],
+        env_extra=env_fixed,
+    )
+    assert r_scaffold.returncode == 0
+    run_dir = Path(r_scaffold.stdout.strip())
+
+    (run_dir / "10_TASKS" / "T-0001__strong.md").write_text(
+        "\n".join(
+            [
+                "# Task T-0001: Strong",
+                "",
+                "## Intent",
+                "Answer a question.",
+                "",
+                "## Deliverables",
+                "- REPORT.md",
+                "- SOURCES.json",
+                "- CLAIMS.json",
+                "- RESIDUALS.md",
+                "",
+                "## Evidence posture",
+                "Prefer primary sources; record uncertainty.",
+                "",
+                "## Contradiction protocol",
+                "If you find conflicting claims, state both and propose a probe.",
+                "",
+                "## Try-to-falsify",
+                "Search for counterexamples; propose discriminating probes.",
+                "",
+                "## Output format",
+                "Prefer JSON registers in fenced blocks.",
+                "",
+                "## Stop rules",
+                "Stop after diminishing returns.",
+                "",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    r_val = _run_ar(["run", "validate", "--run-dir", str(run_dir)])
+    assert r_val.returncode == 0, (r_val.stdout, r_val.stderr)
+    assert "task missing recommended headings" not in r_val.stdout.lower()
