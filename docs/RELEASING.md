@@ -4,13 +4,17 @@
 
 This repo includes an npm package at `integrations/npm/aro-installer`.
 
-### One-time setup (GitHub)
+### One-time setup (npm)
 
-Add a repo secret named `NPM_TOKEN` with an npm automation token that can publish `aro-installer`.
+Enable npm Trusted Publishing (GitHub Actions OIDC) for the `aro-installer` package so GitHub Actions can publish
+without storing long-lived tokens.
 
-Recommended:
-- Enable npm 2FA for publishes.
-- Use a dedicated automation token (not your personal session token).
+On npmjs.com:
+1) Open `aro-installer` → **Settings** → **Trusted Publishers** (GitHub Actions).
+2) Add this repo (`loganrooks/agentic-research-orchestrator`) and workflow file
+   `.github/workflows/npm-publish-aro-installer.yml`.
+
+This workflow already requests `permissions: id-token: write` and publishes with `--provenance`.
 
 ### Release steps
 
