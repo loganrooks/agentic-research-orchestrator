@@ -51,19 +51,8 @@ jobs:
             exit 1
           fi
 
-      - name: Check npm credentials
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
-            echo "Missing required secret: NPM_TOKEN"
-            exit 1
-          fi
-
       - name: Publish
         working-directory: integrations/npm/aro-installer
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm publish --access public --provenance
 
