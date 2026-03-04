@@ -134,6 +134,9 @@ def test_merge_preserves_conflicts_and_emits_divergence(tmp_path: Path) -> None:
     r_merge = _run_ar(["run", "merge", "--run-dir", str(run_dir)])
     assert r_merge.returncode == 11, (r_merge.stdout, r_merge.stderr)
 
+    state = json.loads((run_dir / "STATE.json").read_text(encoding="utf-8"))
+    assert state.get("status") == "partial"
+
     merged_sources = json.loads((run_dir / "30_MERGE" / "SOURCES.json").read_text(encoding="utf-8"))
     assert len(merged_sources) == 1  # deduped by URL
 

@@ -83,7 +83,7 @@ def _runner_preamble(runner: str) -> str:
             "- Preserve conflicts instead of averaging them away.",
             "",
         ]
-    elif runner in ("claude_desktop", "gemini_deep_research", "gemini_cli"):
+    elif runner in ("claude_code", "claude_desktop", "gemini_deep_research", "gemini_cli"):
         extra = [
             "## Runner-specific guidance\n",
             "- Do not assume you can write multiple files; embed registers in your single report response.",

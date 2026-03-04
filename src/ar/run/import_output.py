@@ -203,6 +203,9 @@ def run_import(args: object) -> int:
     if task_row is None:
         task_row = {"task_id": inp.task_id, "status": "done", "producers": []}
         tasks.append(task_row)
+    else:
+        # Manual import indicates the task has at least one completed producer output.
+        task_row["status"] = "done"
 
     producers = task_row.get("producers")
     if not isinstance(producers, list):
@@ -225,4 +228,3 @@ def run_import(args: object) -> int:
 
     sys.stdout.write(str(producer_dir) + "\n")
     return 0
-

@@ -75,3 +75,5 @@ def test_merge_writes_comparison_artifacts(tmp_path: Path) -> None:
     t = next(t for t in data["tasks"] if t["task_id"] == "T-0001")
     assert len(t["producers"]) == 2
 
+    state = json.loads((run_dir / "STATE.json").read_text(encoding="utf-8"))
+    assert state.get("status") == "running"
