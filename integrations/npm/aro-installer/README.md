@@ -67,3 +67,6 @@ npx --yes ./integrations/npm/aro-installer init gemini-cli --scope user --runs-r
 
 Notes:
 - This tool writes config files but does **not** install the Python package. Ensure the configured `command` resolves to a Python environment where `agentic-research-orchestrator` is installed.
+- Add `--backup` to `init` to write `.bak.<ts>` backups of existing MCP config files before editing.
+- Add `--verify-python` to `init` to fail fast if `--python <cmd>` cannot run `-m ar --help`.
+- Interactive `setup` performs the same python check and will warn if it fails.
