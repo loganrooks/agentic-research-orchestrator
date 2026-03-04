@@ -15,6 +15,7 @@ On npmjs.com:
    `.github/workflows/npm-publish-aro-installer.yml`.
 
 This workflow already requests `permissions: id-token: write` and publishes with `--provenance`.
+It also uses Node 24 (npm 11+) because npm Trusted Publishing requires a recent npm CLI (see npm docs).
 
 ### Release steps
 
