@@ -73,6 +73,7 @@ If you find conflicting claims:
 ## Output format
 - Prefer JSON registers in fenced code blocks.
 - If you cannot output JSON, use tables with stable IDs.
+- If you want cross-runner comparisons, include a stable `topic_key` per claim (short string kept consistent within the task across producers).
 
 ## Stop rules
 - Max N searches OR stop when diminishing returns, but record deferred queries.
@@ -93,4 +94,3 @@ Instead demand:
 - and explicit probes.
 
 **Why:** The point is epistemic reliability, not “compliance with a schema.”
-

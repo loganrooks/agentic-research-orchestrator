@@ -184,6 +184,12 @@ Why:
 - When other providers are available, the ability to compare model outputs is one of the main reasons to run them.
 - Comparison is optional: the system must still work when only one producer exists.
 
+#### Note on cross-producer claim matching
+Producer-local `claim_id` values are often generic (`C-0001`, `C-0002`, …) and are **not reliably comparable across producers**.
+
+To enable conservative agreements/conflicts across runners/models, claims may include an optional stable key such as `topic_key`
+(a short, descriptive string kept consistent within the task across producers).
+
 #### `COMPARISON.json` schema (v1)
 This file exists so we can later compute trends (e.g., “does gpt-5.2 medium usually fail to catch contradictions?”) without scraping markdown.
 

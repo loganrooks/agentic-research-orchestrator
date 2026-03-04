@@ -374,6 +374,7 @@ Each claim object:
 ```json
 {
   "claim_id": "C-0001",
+  "topic_key": "worktrees_policy",
   "area": "worktrees|pr_workflow|quality_gates|tdd_and_alternatives|observability|self_improvement|min_human_intervention|other",
   "claim": "A specific statement (falsifiable where helpful; otherwise probe-driven).",
   "recommendation": "What to do.",
@@ -397,6 +398,17 @@ Each claim object:
   "notes": ""
 }
 ```
+
+#### Optional `topic_key` (cross-producer matching)
+`topic_key` is an optional string that, when present, should be **stable within a task across producers**.
+
+Why it exists:
+- Producer-local `claim_id` values are often generic (`C-0001`, `C-0002`, …) and **not comparable across producers**.
+- A stable `topic_key` lets merge/comparison detect agreements/conflicts conservatively without guessing.
+
+Rule of thumb:
+- Use `topic_key` when a claim represents a “slot” you want different runners/models to answer (same topic; possibly different conclusions).
+- Keep it short and descriptive (e.g., `worktrees_policy`, `mcp_security_model`, `status_semantics`).
 
 **Why “probes” instead of mandatory falsification fields:**
 Some recommendations are strategic and context-dependent. Probes are the operational way to “test” them without pretending everything is cleanly falsifiable.
