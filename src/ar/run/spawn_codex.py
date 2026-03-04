@@ -328,6 +328,7 @@ def _build_codex_prompt(task_id: str, task_text: str) -> str:
         "## Output requirements\n"
         "- Output one primary markdown report (with citations/links where possible).\n"
         "- Include a `Residuals / Open Questions` section.\n"
+        "- In `CLAIMS.json`, include a stable `topic_key` per claim when you want it comparable across producers.\n"
         "- Prefer JSON registers in fenced code blocks; table fallback is acceptable.\n\n"
         "SOURCES.json:\n"
         "```json\n"
