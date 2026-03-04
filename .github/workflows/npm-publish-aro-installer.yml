@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Tests
@@ -53,6 +53,8 @@ jobs:
 
       - name: Publish
         working-directory: integrations/npm/aro-installer
+        env:
+          NODE_AUTH_TOKEN: ""
         run: |
           npm publish --access public --provenance
 
