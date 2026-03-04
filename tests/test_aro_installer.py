@@ -107,6 +107,45 @@ def test_aro_installer_init_claude_code_scope_both_writes_project_and_user(tmp_p
     assert "t_ro" in user_cfg["mcpServers"]
 
 
+def test_aro_installer_init_claude_code_project_with_backup_writes_bak_file(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir(parents=True, exist_ok=True)
+    runs_root = tmp_path / "ar-runs"
+
+    orig = {"mcpServers": {"existing": {"command": "x", "args": []}}}
+    cfg_path = proj / ".mcp.json"
+    cfg_path.write_text(json.dumps(orig, indent=2) + "\n", encoding="utf-8")
+
+    r = _run_node(
+        [
+            "init",
+            "claude-code",
+            "--scope",
+            "project",
+            "--project-root",
+            str(proj),
+            "--runs-root",
+            str(runs_root),
+            "--mode",
+            "ro",
+            "--server-name",
+            "t",
+            "--python",
+            sys.executable,
+            "--backup",
+        ],
+        cwd=tmp_path,
+    )
+    assert r.returncode == 0, (r.stdout, r.stderr)
+
+    baks = list(proj.glob(".mcp.json.bak.*"))
+    assert len(baks) == 1
+    assert baks[0].read_text(encoding="utf-8") == json.dumps(orig, indent=2) + "\n"
+
+    new_cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert "t_ro" in new_cfg["mcpServers"]
+
+
 def test_aro_installer_init_gemini_cli_project_writes_settings_json(tmp_path: Path) -> None:
     proj = tmp_path / "proj"
     proj.mkdir(parents=True, exist_ok=True)
@@ -185,3 +224,62 @@ def test_aro_installer_install_claude_code_skill_project_scope_copies_skill(tmp_
     skill_dir = proj / ".claude" / "skills" / "agentic-research-orchestrator"
     assert (skill_dir / "SKILL.md").exists()
     assert (skill_dir / "references" / "claude-code.md").exists()
+
+
+def test_aro_installer_init_verify_python_fails_for_missing_python_cmd(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir(parents=True, exist_ok=True)
+    runs_root = tmp_path / "ar-runs"
+
+    r = _run_node(
+        [
+            "init",
+            "claude-code",
+            "--scope",
+            "project",
+            "--project-root",
+            str(proj),
+            "--runs-root",
+            str(runs_root),
+            "--mode",
+            "ro",
+            "--server-name",
+            "t",
+            "--python",
+            "definitely-not-a-python",
+            "--verify-python",
+        ],
+        cwd=tmp_path,
+    )
+    assert r.returncode != 0
+    assert "python verification failed" in (r.stdout + r.stderr).lower()
+
+
+def test_aro_installer_init_verify_python_succeeds_with_pythonpath(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir(parents=True, exist_ok=True)
+    runs_root = tmp_path / "ar-runs"
+
+    repo_root = Path(__file__).resolve().parents[1]
+    r = _run_node(
+        [
+            "init",
+            "gemini-cli",
+            "--scope",
+            "project",
+            "--project-root",
+            str(proj),
+            "--runs-root",
+            str(runs_root),
+            "--mode",
+            "ro",
+            "--server-name",
+            "t",
+            "--python",
+            sys.executable,
+            "--verify-python",
+        ],
+        cwd=tmp_path,
+        env_extra={"PYTHONPATH": str(repo_root / "src")},
+    )
+    assert r.returncode == 0, (r.stdout, r.stderr)

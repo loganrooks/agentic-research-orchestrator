@@ -4,6 +4,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const readline = require("readline");
 
 function die(message, code = 1) {
@@ -46,6 +47,31 @@ function parseFlags(argv) {
   return { positionals, flags };
 }
 
+function _truncate(s, maxLen) {
+  const t = String(s || "");
+  if (t.length <= maxLen) return t;
+  return t.slice(0, maxLen).trimEnd() + "…";
+}
+
+function verifyPythonHasAr(pythonCmd) {
+  const cmd = String(pythonCmd || "").trim() || "python3";
+  const r = spawnSync(cmd, ["-m", "ar", "--help"], { encoding: "utf8" });
+  if (r.error) {
+    return { ok: false, cmd, reason: "spawn_error", error: String(r.error.message || r.error) };
+  }
+  if (r.status !== 0) {
+    return {
+      ok: false,
+      cmd,
+      reason: "nonzero_exit",
+      status: r.status,
+      stderr: _truncate(r.stderr || "", 1200),
+      stdout: _truncate(r.stdout || "", 1200),
+    };
+  }
+  return { ok: true, cmd };
+}
+
 function printHelp() {
   const help = `
 aro-installer
@@ -56,8 +82,8 @@ Usage:
   aro install codex-skill [--name <skill>] [--dest <skills-root>] [--force]
   aro install claude-code-skill --scope <project|user|both> [--project-root <dir>] [--name <skill>] [--force]
 
-  aro init claude-code --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
-  aro init gemini-cli --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
+  aro init claude-code --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>] [--backup] [--verify-python]
+  aro init gemini-cli --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>] [--backup] [--verify-python]
 
   aro setup [--tier <profile|custom|advanced>] [--profile <safe|standard|global>]
              # interactive wizard (requires TTY)
@@ -249,10 +275,38 @@ function cmdInit(argv) {
   const pythonCmd = String(flags.python || "").trim() || "python3";
   const mode = String(flags.mode || "").trim() || "ro";
   const baseName = String(flags["server-name"] || "").trim() || "aro";
+  const backupExisting = flags.backup === true || String(flags.backup || "").toLowerCase() === "true";
+  const verifyPython = flags["verify-python"] === true || String(flags["verify-python"] || "").toLowerCase() === "true";
 
   if (!["ro", "rw", "both"].includes(mode)) die("Invalid --mode. Expected: ro | rw | both");
 
-  const configPaths = initClient({ client, scope, projectRoot, runsRootAbs, pythonCmd, mode, baseName, maxCallsPerMinute: 0, backupExisting: false });
+  if (verifyPython) {
+    const check = verifyPythonHasAr(pythonCmd);
+    if (!check.ok) {
+      die(
+        [
+          `Python verification failed for '${check.cmd} -m ar --help'.`,
+          "This tool does not install the Python package; install agentic-research-orchestrator into that Python environment, then re-run.",
+          check.reason === "spawn_error" ? `error: ${check.error}` : `exit_status: ${check.status}`,
+          check.stderr ? `stderr:\n${check.stderr}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+    }
+  }
+
+  const configPaths = initClient({
+    client,
+    scope,
+    projectRoot,
+    runsRootAbs,
+    pythonCmd,
+    mode,
+    baseName,
+    maxCallsPerMinute: 0,
+    backupExisting,
+  });
   for (const configPath of configPaths) {
     process.stdout.write(`Updated ${client} MCP config: ${configPath}\n`);
   }
@@ -462,7 +516,27 @@ async function cmdSetup(argv) {
   }
 
   _printSetupSummary(cfg, projectRoot);
-  const ok = await _askYesNo("Proceed?", true);
+  let pythonCheck = null;
+  if (cfg.doClaude || cfg.doGemini) {
+    pythonCheck = verifyPythonHasAr(cfg.pythonCmd);
+    if (pythonCheck.ok) {
+      process.stdout.write("- Python check: OK (`-m ar --help`)\n");
+    } else {
+      process.stdout.write("- Python check: FAILED (`-m ar --help`)\n");
+      if (pythonCheck.reason === "spawn_error") {
+        process.stdout.write(`  - error: ${pythonCheck.error}\n`);
+      } else {
+        process.stdout.write(`  - exit_status: ${pythonCheck.status}\n`);
+        if (pythonCheck.stderr) process.stdout.write(`  - stderr: ${_truncate(pythonCheck.stderr, 250)}\n`);
+      }
+      process.stdout.write(
+        "  - Note: this tool does not install the Python package; install agentic-research-orchestrator into that environment.\n",
+      );
+    }
+  }
+
+  const proceedDefault = pythonCheck ? pythonCheck.ok : true;
+  const ok = await _askYesNo("Proceed?", proceedDefault);
   if (!ok) {
     process.stdout.write("Aborted.\n");
     return;

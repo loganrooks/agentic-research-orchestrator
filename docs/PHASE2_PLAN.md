@@ -41,10 +41,10 @@ Completed:
 - P0-C rename “targets” → “context anchors” (terminology trap; keep `--targets` alias)
 - P1 conservative claim matching via optional `topic_key`
 - P1 task lint quality gate (warnings in `ar run validate`)
+- P2 installer QoL (`aro init --backup/--verify-python`, python verification in `aro setup`)
 
 Deferred / optional:
-- P2 installer QoL (only if gaps remain after core epistemic fixes)
-  - candidate gaps: `aro setup` verifying the configured python can run `-m ar --help`; optional backups for non-interactive init paths
+- (none)
 
 ---
 
