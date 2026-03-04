@@ -177,7 +177,7 @@ Required sections:
 2. **Motivating context** (why now; what’s failing today)
 3. **Non-goals**
 4. **Constraints** (time, cost, recency, allowed sources)
-5. **Targets** (repos/products; can be “none”)
+5. **Context anchors (optional)** (repos/products/paths; can be “none”)
 6. **Priors + what would change your mind**
 7. **Output preferences** (depth, style, audience)
 
@@ -189,7 +189,7 @@ Required keys (v1):
 - `run_id` (string)
 - `created_at` (ISO8601)
 - `created_by` (string; may be empty)
-- `targets` (list of `{path,label}`)
+- `targets` (list of `{path,label}`; context anchors)
 - `runner_plan` (object with required vs optional runners):
   - `required` (list)
   - `optional` (list)

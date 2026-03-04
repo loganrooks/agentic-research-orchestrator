@@ -66,7 +66,7 @@ Required inputs:
 
 Optional inputs:
 - `--runs-root <path>` (default `AR_RUNS_ROOT` or `~/.ar/runs`)
-- `--targets <path>` (repeatable)
+- `--context-anchor <path>` (repeatable; alias: `--targets`)
 - Runner plan:
   - `--required-runner <runner>` (repeatable; default: `codex`)
   - `--optional-runner <runner>` (repeatable; default: `claude_desktop`, `cowork`, `gemini_deep_research`, `gemini_cli`)

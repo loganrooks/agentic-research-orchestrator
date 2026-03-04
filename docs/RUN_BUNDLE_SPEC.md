@@ -53,7 +53,7 @@ Minimum required sections:
 - Motivating context
 - Non-goals
 - Constraints
-- Targets
+- Context anchors (optional)
 - Priors + what would change your mind
 - Output preferences
 
