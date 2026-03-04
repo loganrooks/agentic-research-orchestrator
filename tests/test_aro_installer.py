@@ -150,3 +150,38 @@ def test_aro_installer_install_codex_skill_copies_skill_folder(tmp_path: Path) -
     skill_dir = dest / "agentic-research-orchestrator"
     assert (skill_dir / "SKILL.md").exists()
     assert (skill_dir / "agents" / "openai.yaml").exists()
+
+
+def test_aro_installer_install_claude_code_skill_user_scope_copies_skill(tmp_path: Path) -> None:
+    r = _run_node(
+        ["install", "claude-code-skill", "--scope", "user"],
+        cwd=tmp_path,
+        env_extra={"HOME": str(tmp_path)},
+    )
+    assert r.returncode == 0, (r.stdout, r.stderr)
+
+    skill_dir = tmp_path / ".claude" / "skills" / "agentic-research-orchestrator"
+    assert (skill_dir / "SKILL.md").exists()
+    assert (skill_dir / "references" / "claude-code.md").exists()
+
+
+def test_aro_installer_install_claude_code_skill_project_scope_copies_skill(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir(parents=True, exist_ok=True)
+
+    r = _run_node(
+        [
+            "install",
+            "claude-code-skill",
+            "--scope",
+            "project",
+            "--project-root",
+            str(proj),
+        ],
+        cwd=tmp_path,
+    )
+    assert r.returncode == 0, (r.stdout, r.stderr)
+
+    skill_dir = proj / ".claude" / "skills" / "agentic-research-orchestrator"
+    assert (skill_dir / "SKILL.md").exists()
+    assert (skill_dir / "references" / "claude-code.md").exists()

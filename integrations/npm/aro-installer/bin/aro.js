@@ -54,6 +54,7 @@ Usage:
   aro --help
 
   aro install codex-skill [--name <skill>] [--dest <skills-root>] [--force]
+  aro install claude-code-skill --scope <project|user|both> [--project-root <dir>] [--name <skill>] [--force]
 
   aro init claude-code --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
   aro init gemini-cli --scope <project|user|both> [--project-root <dir>] [--runs-root <dir>] [--python <cmd>] [--mode <ro|rw|both>] [--server-name <base>]
@@ -78,6 +79,14 @@ function defaultCodexSkillsRoot() {
   const codexHome = expandHome(process.env.CODEX_HOME || "");
   const base = codexHome ? codexHome : path.join(os.homedir(), ".codex");
   return path.join(base, "skills");
+}
+
+function defaultClaudeSkillsRootUser() {
+  return path.join(os.homedir(), ".claude", "skills");
+}
+
+function defaultClaudeSkillsRootProject(projectRoot) {
+  return path.join(projectRoot, ".claude", "skills");
 }
 
 function readJsonIfExists(p) {
@@ -142,6 +151,18 @@ function installCodexSkill({ skillName, destRoot, force }) {
   return destSkill;
 }
 
+function installClaudeCodeSkill({ skillName, scope, projectRoot, force }) {
+  if (!["project", "user", "both"].includes(scope)) die("Invalid --scope. Expected: project | user | both");
+  const scopes = scope === "both" ? ["user", "project"] : [scope];
+
+  const installed = [];
+  for (const sc of scopes) {
+    const destRoot = sc === "user" ? defaultClaudeSkillsRootUser() : defaultClaudeSkillsRootProject(projectRoot);
+    installed.push(installCodexSkill({ skillName, destRoot, force }));
+  }
+  return installed;
+}
+
 function _backupFileIfExists(p, ts) {
   if (!fs.existsSync(p)) return;
   const b = `${p}.bak.${ts}`;
@@ -190,15 +211,29 @@ function initClient({ client, scope, projectRoot, runsRootAbs, pythonCmd, mode, 
 function cmdInstall(argv) {
   const { positionals, flags } = parseFlags(argv);
   const sub = positionals[0];
-  if (sub !== "codex-skill") die(`Unknown install target: ${sub || "<missing>"}`);
+  if (sub !== "codex-skill" && sub !== "claude-code-skill") {
+    die(`Unknown install target: ${sub || "<missing>"}`);
+  }
 
   const skillName = String(flags.name || "agentic-research-orchestrator").trim();
-  const destRoot = expandHome(flags.dest || "") || defaultCodexSkillsRoot();
   const force = flags.force === true || String(flags.force || "").toLowerCase() === "true";
 
-  const destSkill = installCodexSkill({ skillName, destRoot, force });
-  process.stdout.write(`Installed Codex skill: ${destSkill}\n`);
-  process.stdout.write("Restart Codex to pick up new skills.\n");
+  if (sub === "codex-skill") {
+    const destRoot = expandHome(flags.dest || "") || defaultCodexSkillsRoot();
+    const destSkill = installCodexSkill({ skillName, destRoot, force });
+    process.stdout.write(`Installed Codex skill: ${destSkill}\n`);
+    process.stdout.write("Restart Codex to pick up new skills.\n");
+    return;
+  }
+
+  const scope = String(flags.scope || "").trim() || "project";
+  if (!["project", "user", "both"].includes(scope)) die("Invalid --scope. Expected: project | user | both");
+  const projectRoot = path.resolve(expandHome(flags["project-root"] || "") || process.cwd());
+  const paths = installClaudeCodeSkill({ skillName, scope, projectRoot, force });
+  for (const p of paths) {
+    process.stdout.write(`Installed Claude Code skill: ${p}\n`);
+  }
+  process.stdout.write("Restart Claude Code if it does not pick up skills automatically.\n");
 }
 
 function cmdInit(argv) {
@@ -289,6 +324,7 @@ function _defaultRunsRoot() {
 function _setupProfiles() {
   const base = {
     installSkill: true,
+    installClaudeSkill: true,
     doClaude: true,
     doGemini: true,
     scope: "project",
@@ -329,6 +365,13 @@ function _printSetupSummary(cfg, projectRoot) {
   process.stdout.write("\nPlanned changes:\n");
   if (cfg.installSkill) {
     process.stdout.write(`- Codex skill -> ${path.join(cfg.skillDestRoot, "agentic-research-orchestrator")}\n`);
+  }
+  if (cfg.installClaudeSkill) {
+    const scopes = cfg.scope === "both" ? ["user", "project"] : [cfg.scope];
+    for (const sc of scopes) {
+      const destRoot = sc === "user" ? defaultClaudeSkillsRootUser() : defaultClaudeSkillsRootProject(projectRoot);
+      process.stdout.write(`- Claude Code skill (${sc}) -> ${path.join(destRoot, "agentic-research-orchestrator")}\n`);
+    }
   }
   if (cfg.doClaude) {
     process.stdout.write(`- Claude Code MCP (${scopeText})\n`);
@@ -377,6 +420,7 @@ async function cmdSetup(argv) {
     }
   } else if (tier === "custom") {
     cfg.installSkill = await _askYesNo("Install Codex skill?", cfg.installSkill);
+    cfg.installClaudeSkill = await _askYesNo("Install Claude Code skill?", cfg.installClaudeSkill);
     cfg.doClaude = await _askYesNo("Configure Claude Code MCP?", cfg.doClaude);
     cfg.doGemini = await _askYesNo("Configure Gemini CLI MCP?", cfg.doGemini);
 
@@ -396,6 +440,7 @@ async function cmdSetup(argv) {
     cfg.skillDestRoot = path.resolve(expandHome(await _ask("Codex skills root", cfg.skillDestRoot)));
     cfg.skillForce = await _askYesNo("Overwrite Codex skill if it already exists?", cfg.skillForce);
 
+    cfg.installClaudeSkill = await _askYesNo("Install Claude Code skill?", cfg.installClaudeSkill);
     cfg.doClaude = await _askYesNo("Configure Claude Code MCP?", cfg.doClaude);
     cfg.doGemini = await _askYesNo("Configure Gemini CLI MCP?", cfg.doGemini);
 
@@ -435,6 +480,25 @@ async function cmdSetup(argv) {
     } else {
       process.stdout.write("\nSkipped Codex skill install.\n");
     }
+  }
+
+  if (cfg.installClaudeSkill) {
+    const scopes = cfg.scope === "both" ? ["user", "project"] : [cfg.scope];
+    const installed = [];
+    for (const sc of scopes) {
+      const destRoot = sc === "user" ? defaultClaudeSkillsRootUser() : defaultClaudeSkillsRootProject(projectRoot);
+      const existing = path.join(destRoot, "agentic-research-orchestrator");
+      let force = cfg.skillForce;
+      if (!force && fs.existsSync(existing)) {
+        force = await _askYesNo(`Claude Code skill already exists at ${existing}. Overwrite?`, false);
+      }
+      if (!fs.existsSync(existing) || force) {
+        installed.push(installCodexSkill({ skillName: "agentic-research-orchestrator", destRoot, force }));
+      } else {
+        process.stdout.write(`\nSkipped Claude Code skill install for ${sc} scope.\n`);
+      }
+    }
+    for (const p of installed) process.stdout.write(`\nInstalled Claude Code skill: ${p}\n`);
   }
 
   if (cfg.doClaude) {

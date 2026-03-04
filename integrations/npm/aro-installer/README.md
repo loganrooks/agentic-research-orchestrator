@@ -2,6 +2,7 @@
 
 Minimal installer/config generator for:
 - Codex skills (`~/.codex/skills/...`)
+- Claude Code skills (`~/.claude/skills/...` and `.claude/skills/...`)
 - MCP client config (Claude Code `.mcp.json` / `~/.claude.json`, Gemini CLI `.gemini/settings.json` / `~/.gemini/settings.json`)
 
 ## Usage
@@ -40,6 +41,16 @@ Non-interactive: install the Codex skill:
 
 ```bash
 npx --yes ./integrations/npm/aro-installer install codex-skill
+```
+
+Non-interactive: install the Claude Code skill:
+
+```bash
+# user scope
+npx --yes ./integrations/npm/aro-installer install claude-code-skill --scope user
+
+# project scope
+npx --yes ./integrations/npm/aro-installer install claude-code-skill --scope project --project-root .
 ```
 
 Non-interactive: initialize Claude Code MCP config (project scope):
