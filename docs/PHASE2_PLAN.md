@@ -34,6 +34,17 @@ Why these gates:
 - Smoke run catches end-to-end breakage.
 - The epistemic check catches “everything is syntactically valid but epistemically useless.”
 
+### Status (as of 2026-03-04)
+Completed:
+- P0-A runner terminology disambiguation (support `claude_code` in `export-prompts` + docs)
+- P0-B trustworthy `STATE.json.status` transitions (import + merge semantics)
+- P1 conservative claim matching via optional `topic_key`
+
+Pending / in-progress:
+- P0-C rename “targets” → “context anchors” (terminology trap)
+- P1 task lint quality gate (warnings)
+- P2 installer QoL (only if gaps remain after core epistemic fixes)
+
 ---
 
 ## 1) Phase 2 goals (what “better” means)
@@ -97,6 +108,22 @@ Gate:
 - new unit tests for status transitions
 - smoke run: status should not remain `merging` after merge completes
 
+### P0-C) Rename “targets” → “context anchors” (docs + CLI alias)
+Problem:
+- “Targets” reads like research is “about a folder”, which is backwards: runs are about questions; a path is optional grounding context.
+
+Recommendation:
+- Rename user-facing terminology to **context anchors** (brief template, docs, CLI help).
+- Keep backwards compatibility:
+  - continue accepting `--targets` as an alias
+  - keep on-disk schema stable (treat existing `01_CONFIG.json.targets` as “context anchors”)
+
+Epistemic grounding:
+- reduce avoidable confusion induced by tool vocabulary (bounded rationality). (`docs/EPISTEMIC_GROUNDING.md` §3.9)
+
+Gate:
+- test: scaffold accepts `--context-anchor` and `--targets`
+
 ### P1) Reduce false conflict/agreement detection in merge
 Problem:
 - conflict grouping uses `original_claim_id` (producer-local `claim_id`) which can collide across producers.
@@ -159,4 +186,3 @@ After merging Phase 2 to `main`:
   - `docs/EPISTEMIC_GROUNDING.md`
   - `docs/CODEBASE_REVIEW_2026-03-04.md`
   - this Phase 2 plan
-

@@ -142,13 +142,13 @@ def run_scaffold(args: object) -> int:
         max_workers=int(getattr(args, "codex_max_workers", 3)),
     )
 
-    targets_in = list(getattr(args, "targets", []) or [])
-    targets = []
-    for t in targets_in:
+    anchors_in = list(getattr(args, "context_anchors", []) or getattr(args, "targets", []) or [])
+    anchors = []
+    for t in anchors_in:
         if not t:
             continue
         p = Path(t).expanduser().resolve()
-        targets.append({"path": str(p), "label": p.name})
+        anchors.append({"path": str(p), "label": p.name})
 
     # Create structure.
     if not dry_run:
@@ -156,7 +156,7 @@ def run_scaffold(args: object) -> int:
         (run_dir / "20_WORK").mkdir(parents=True, exist_ok=True)
         (run_dir / "30_MERGE").mkdir(parents=True, exist_ok=True)
 
-    targets_md = "\n".join([f"- {x['path']}" for x in targets]) if targets else "- (none)"
+    anchors_md = "\n".join([f"- {x['path']}" for x in anchors]) if anchors else "- (none)"
 
     brief = f"""# Research Run Brief
 
@@ -175,8 +175,8 @@ def run_scaffold(args: object) -> int:
 - recency:
 - allowed sources:
 
-## Targets
-{targets_md}
+## Context anchors (optional)
+{anchors_md}
 
 ## Priors + what would change your mind
 <state priors and what evidence would force revision>
@@ -190,7 +190,7 @@ def run_scaffold(args: object) -> int:
         "run_id": run_id,
         "created_at": now.isoformat(timespec="seconds"),
         "created_by": os.environ.get("USER", ""),
-        "targets": targets,
+        "targets": anchors,
         "runner_plan": {"required": required, "optional": optional},
         "codex": {
             "model_default": codex.model,

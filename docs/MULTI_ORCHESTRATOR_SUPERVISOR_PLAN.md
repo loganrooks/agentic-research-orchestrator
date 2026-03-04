@@ -22,7 +22,7 @@ This plan is written to be:
 - `ar run validate/status` provide structural checks and operator summaries.
 
 What is missing (and why the system can feel “not agentic”):
-- There is no supervisor loop that *generates tasks* from `00_BRIEF.md`/targets, *iterates*, and *spawns follow-ups* based on conflicts/gaps.
+- There is no supervisor loop that *generates tasks* from `00_BRIEF.md` / context anchors, *iterates*, and *spawns follow-ups* based on conflicts/gaps.
 
 ---
 
